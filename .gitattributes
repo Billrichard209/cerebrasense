@@ -1,0 +1,25 @@
+# Handle line endings automatically for files detected as text
+# and leave all files detected as binary untouched.
+* text=auto
+
+# Standard Python ignore patterns
+*.py  text eol=lf
+*.ipynb text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+
+# Force batch scripts to have CRLF for Windows compatibility
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pt binary
+*.pth binary
+*.onnx binary
