@@ -74,6 +74,8 @@ class LossConfig:
     """Loss-function settings."""
 
     name: str = "cross_entropy"
+    class_weights: tuple[float, ...] | None = None
+    focal_gamma: float = 2.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -192,6 +194,8 @@ def _merge_training_config(default_config: ResearchOASISTrainingConfig, override
 
     loss_section = dict(asdict(default_config.loss))
     loss_section.update(overrides.get("loss", {}))
+    if loss_section.get("class_weights") is not None:
+        loss_section["class_weights"] = _as_tuple(loss_section["class_weights"], cast_type=float, expected_length=2)
 
     early_stopping_section = dict(asdict(default_config.early_stopping))
     early_stopping_section.update(overrides.get("early_stopping", {}))

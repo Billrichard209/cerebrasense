@@ -24,7 +24,15 @@ def _settings(tmp_path: Path) -> AppSettings:
         "active_oasis_model_registry: outputs/model_registry/oasis_current_baseline.json\n",
         encoding="utf-8",
     )
-    for doc_name in ["PROJECT_BACKBONE.md", "project_scope.md", "oasis_productization_workflow.md", "github_drive_workflow.md"]:
+    for doc_name in [
+        "PROJECT_BACKBONE.md",
+        "project_scope.md",
+        "oasis_productization_workflow.md",
+        "github_drive_workflow.md",
+        "oasis2_readiness.md",
+        "oasis2_drive_upload_checklist.md",
+        "colab_cerebrasensecloud_quickstart.md",
+    ]:
         (docs_root / doc_name).write_text(doc_name, encoding="utf-8")
     return AppSettings(
         project_root=project_root,
@@ -75,6 +83,24 @@ def test_build_project_status_bundle_collects_core_artifacts(tmp_path: Path) -> 
     (settings.outputs_root / "reports" / "readiness" / "backend_readiness.md").write_text("readiness", encoding="utf-8")
     _write_json(settings.outputs_root / "reports" / "productization" / "oasis_productization_status.json", {"overall_status": "fail"})
     (settings.outputs_root / "reports" / "productization" / "oasis_productization_status.md").write_text("productization", encoding="utf-8")
+    _write_json(
+        settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.json",
+        {"readiness_status": "warn"},
+    )
+    (settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.md").write_text(
+        "oasis2 onboarding",
+        encoding="utf-8",
+    )
+    _write_json(settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.json", {"overall_status": "pass"})
+    (settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.md").write_text(
+        "oasis2 upload status",
+        encoding="utf-8",
+    )
+    _write_json(
+        settings.outputs_root / "exports" / "oasis2_upload_bundle" / "backend_reference" / "oasis2_upload_bundle_summary.json",
+        {"included_session_count": 1},
+    )
+    (settings.outputs_root / "exports" / "oasis2_upload_bundle" / "README.md").write_text("bundle readme", encoding="utf-8")
     _write_json(settings.outputs_root / "model_registry" / "oasis_current_baseline.json", {"run_name": "active_run"})
     _write_json(settings.outputs_root / "model_registry" / "oasis_candidate_v3.json", {"run_name": "candidate_run"})
     active_demo_root = settings.outputs_root / "reports" / "demo" / "active_demo"
@@ -89,6 +115,9 @@ def test_build_project_status_bundle_collects_core_artifacts(tmp_path: Path) -> 
     bundle_root = Path(result.bundle_root)
     assert bundle_root.exists()
     assert (bundle_root / "files" / "oasis_presentation_summary.md").exists()
+    assert (bundle_root / "files" / "oasis2_onboarding_bundle.md").exists()
+    assert (bundle_root / "files" / "oasis2_upload_bundle_status.md").exists()
+    assert (bundle_root / "files" / "oasis2_drive_upload_checklist.md").exists()
     assert (bundle_root / "demo" / "active_bundle" / "demo_summary.json").exists()
     assert (bundle_root / "demo" / "candidate_bundle" / "demo_summary.json").exists()
     assert result.recommendation == "keep_active"

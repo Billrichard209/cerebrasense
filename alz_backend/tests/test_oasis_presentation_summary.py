@@ -89,6 +89,18 @@ def test_build_oasis_presentation_summary_uses_existing_reports(tmp_path: Path) 
             "summary": {"pass": 6, "fail": 1},
         },
     )
+    _write_json(
+        settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.json",
+        {"readiness_status": "warn"},
+    )
+    _write_json(
+        settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.json",
+        {"overall_status": "pass"},
+    )
+    _write_json(
+        settings.outputs_root / "exports" / "oasis2_upload_bundle" / "backend_reference" / "oasis2_upload_bundle_summary.json",
+        {"included_session_count": 373, "materialized_file_count": 746},
+    )
 
     summary = presentation_module.build_oasis_presentation_summary(
         settings=settings,
@@ -99,8 +111,11 @@ def test_build_oasis_presentation_summary_uses_existing_reports(tmp_path: Path) 
 
     assert summary.recommendation == "keep_active"
     assert summary.project_state["productization_overall_status"] == "fail"
+    assert summary.project_state["oasis2_upload_bundle_status"] == "pass"
+    assert summary.project_state["oasis2_upload_included_session_count"] == 373
     assert summary.key_metrics["active_test_auroc"] == 0.8793650793650795
     assert summary.demo_assets["candidate_bundle_root"] == "demo_candidate"
+    assert any("OASIS-2 upload bundle" in point for point in summary.talking_points)
 
     json_path, md_path = presentation_module.save_oasis_presentation_summary(summary, settings)
 

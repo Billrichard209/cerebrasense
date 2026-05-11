@@ -90,6 +90,18 @@ def build_project_status_bundle(
     readiness_md = resolved_settings.outputs_root / "reports" / "readiness" / "backend_readiness.md"
     productization_json = resolved_settings.outputs_root / "reports" / "productization" / "oasis_productization_status.json"
     productization_md = resolved_settings.outputs_root / "reports" / "productization" / "oasis_productization_status.md"
+    oasis2_onboarding_json = (
+        resolved_settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.json"
+    )
+    oasis2_onboarding_md = (
+        resolved_settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.md"
+    )
+    oasis2_upload_status_json = resolved_settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.json"
+    oasis2_upload_status_md = resolved_settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.md"
+    oasis2_upload_summary_json = (
+        resolved_settings.outputs_root / "exports" / "oasis2_upload_bundle" / "backend_reference" / "oasis2_upload_bundle_summary.json"
+    )
+    oasis2_upload_readme = resolved_settings.outputs_root / "exports" / "oasis2_upload_bundle" / "README.md"
     active_registry = resolved_settings.outputs_root / "model_registry" / "oasis_current_baseline.json"
     candidate_registry = resolved_settings.outputs_root / "model_registry" / "oasis_candidate_v3.json"
 
@@ -97,6 +109,9 @@ def build_project_status_bundle(
     scope_doc = resolved_settings.project_root / "docs" / "project_scope.md"
     productization_doc = resolved_settings.project_root / "docs" / "oasis_productization_workflow.md"
     github_drive_doc = resolved_settings.project_root / "docs" / "github_drive_workflow.md"
+    oasis2_readiness_doc = resolved_settings.project_root / "docs" / "oasis2_readiness.md"
+    oasis2_drive_doc = resolved_settings.project_root / "docs" / "oasis2_drive_upload_checklist.md"
+    colab_quickstart_doc = resolved_settings.project_root / "docs" / "colab_cerebrasensecloud_quickstart.md"
 
     comparison_payload = _load_json(comparison_json)
     presentation_payload = _load_json(presentation_json)
@@ -117,12 +132,21 @@ def build_project_status_bundle(
         "readiness_md": readiness_md,
         "productization_json": productization_json,
         "productization_md": productization_md,
+        "oasis2_onboarding_json": oasis2_onboarding_json,
+        "oasis2_onboarding_md": oasis2_onboarding_md,
+        "oasis2_upload_status_json": oasis2_upload_status_json,
+        "oasis2_upload_status_md": oasis2_upload_status_md,
+        "oasis2_upload_summary_json": oasis2_upload_summary_json,
+        "oasis2_upload_readme": oasis2_upload_readme,
         "active_registry": active_registry,
         "candidate_registry": candidate_registry,
         "project_backbone_doc": backbone_doc,
         "project_scope_doc": scope_doc,
         "oasis_productization_doc": productization_doc,
         "github_drive_workflow_doc": github_drive_doc,
+        "oasis2_readiness_doc": oasis2_readiness_doc,
+        "oasis2_drive_upload_doc": oasis2_drive_doc,
+        "colab_quickstart_doc": colab_quickstart_doc,
     }
     for key, source_path in files_to_copy.items():
         if source_path.exists():
@@ -158,6 +182,17 @@ def build_project_status_bundle(
             "Active and candidate demo bundles are copied side by side when they exist.",
         ],
     )
+    if any(
+        key in included_artifacts
+        for key in (
+            "oasis2_onboarding_json",
+            "oasis2_upload_status_json",
+            "oasis2_upload_summary_json",
+        )
+    ):
+        summary.notes.append(
+            "When present, the current OASIS-2 onboarding and upload-bundle artifacts are included so the next longitudinal branch can be reviewed alongside the active OASIS baseline."
+        )
 
     summary_json_path = bundle_root / "project_status_bundle.json"
     summary_md_path = bundle_root / "project_status_bundle.md"

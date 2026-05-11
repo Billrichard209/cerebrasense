@@ -35,13 +35,15 @@ scheduler:
   factor: 0.5
 
 loss:
-  name: cross_entropy
+  name: focal_loss
+  class_weights: [1.5, 1.0]
+  focal_gamma: 2.0
 
 early_stopping:
   enabled: true
   patience: 8
   min_delta: 0.001
-  monitor: val_auroc
+  monitor: val_f1
   mode: max
 
 checkpoint:

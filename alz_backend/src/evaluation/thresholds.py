@@ -75,13 +75,15 @@ def evaluate_threshold_frame(frame: pd.DataFrame, threshold: float) -> dict[str,
 def _score_for_selection(metrics: dict[str, Any], selection_metric: str) -> float:
     """Return a scalar score for threshold selection."""
 
+    if selection_metric in {"youden", "youden_index"}:
+        return float(metrics["sensitivity"] + metrics["specificity"] - 1.0)
     if selection_metric == "balanced_accuracy":
         return float((metrics["sensitivity"] + metrics["specificity"]) / 2.0)
     if selection_metric in metrics:
         return float(metrics[selection_metric])
     raise ValueError(
         f"Unsupported selection metric: {selection_metric}. "
-        "Use f1, accuracy, sensitivity, specificity, precision, auroc, or balanced_accuracy."
+        "Use f1, accuracy, sensitivity, specificity, precision, auroc, balanced_accuracy, or youden_index."
     )
 
 

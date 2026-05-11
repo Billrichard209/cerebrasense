@@ -102,6 +102,12 @@ class OASISAugmentationConfig:
     scale_range: tuple[float, float, float] = (0.02, 0.02, 0.02)
     gaussian_noise_probability: float = 0.1
     gaussian_noise_std: float = 0.01
+    bias_field_probability: float = 0.0
+    bias_field_coeff_range: tuple[float, float] = (0.0, 0.1)
+    gibbs_noise_probability: float = 0.0
+    gibbs_alpha: tuple[float, float] = (0.0, 0.3)
+    contrast_probability: float = 0.0
+    contrast_gamma: tuple[float, float] = (0.8, 1.2)
 
 
 @dataclass(slots=True, frozen=True)
@@ -179,6 +185,13 @@ def _merge_dataclass_config(default_config: OASISTransformConfig, overrides: dic
             cast_type=float,
             expected_length=3,
         )
+    for key in ("bias_field_coeff_range", "gibbs_alpha", "contrast_gamma"):
+        if key in augmentation_section:
+            augmentation_section[key] = _as_tuple(
+                augmentation_section[key],
+                cast_type=float,
+                expected_length=2,
+            )
 
     return OASISTransformConfig(
         load=OASISLoadConfig(**load_section),
@@ -203,10 +216,20 @@ def load_oasis_transform_config(config_path: str | Path | None = None) -> OASIST
     return _merge_dataclass_config(OASISTransformConfig(), payload)
 
 
-def _foreground_select_fn(threshold: float):
+class ForegroundThresholdSelector:
+    """Pickle-safe foreground selector for MONAI multiprocessing workers."""
+
+    def __init__(self, threshold: float) -> None:
+        self.threshold = threshold
+
+    def __call__(self, image: object) -> object:
+        return image > self.threshold
+
+
+def _foreground_select_fn(threshold: float) -> ForegroundThresholdSelector:
     """Build a MONAI-compatible foreground selector."""
 
-    return lambda image: image > threshold
+    return ForegroundThresholdSelector(threshold)
 
 
 def _build_common_oasis_steps(cfg: OASISTransformConfig) -> list[tuple[str, object]]:
@@ -311,7 +334,7 @@ def _build_train_aug_steps(cfg: OASISTransformConfig) -> list[tuple[str, object]
 
     symbols = _load_monai_transform_symbols()
     rotate_range_radians = tuple(radians(value) for value in cfg.augmentation.rotate_range_degrees)
-    return [
+    steps = [
         (
             "small_affine_augmentation",
             symbols["RandAffined"](
@@ -333,6 +356,40 @@ def _build_train_aug_steps(cfg: OASISTransformConfig) -> list[tuple[str, object]
             ),
         ),
     ]
+    if cfg.augmentation.bias_field_probability > 0:
+        steps.append(
+            (
+                "bias_field_augmentation",
+                symbols["RandBiasFieldd"](
+                    keys=list(cfg.load.keys),
+                    prob=cfg.augmentation.bias_field_probability,
+                    coeff_range=cfg.augmentation.bias_field_coeff_range,
+                ),
+            )
+        )
+    if cfg.augmentation.gibbs_noise_probability > 0:
+        steps.append(
+            (
+                "gibbs_noise_augmentation",
+                symbols["RandGibbsNoised"](
+                    keys=list(cfg.load.keys),
+                    prob=cfg.augmentation.gibbs_noise_probability,
+                    alpha=cfg.augmentation.gibbs_alpha,
+                ),
+            )
+        )
+    if cfg.augmentation.contrast_probability > 0:
+        steps.append(
+            (
+                "contrast_augmentation",
+                symbols["RandAdjustContrastd"](
+                    keys=list(cfg.load.keys),
+                    prob=cfg.augmentation.contrast_probability,
+                    gamma=cfg.augmentation.contrast_gamma,
+                ),
+            )
+        )
+    return steps
 
 
 def describe_oasis_transform_pipeline(
@@ -354,6 +411,9 @@ def describe_oasis_transform_pipeline(
         "intensity_normalization": "Normalize image intensities after spatial preprocessing for stable optimization.",
         "small_affine_augmentation": "Apply small spatial perturbations that are plausible for MRI classification training.",
         "gaussian_noise_augmentation": "Add mild Gaussian noise to improve robustness without over-augmenting anatomy.",
+        "bias_field_augmentation": "Simulate MRI scanner field inhomogeneity during training.",
+        "gibbs_noise_augmentation": "Simulate MRI ringing artifacts during training.",
+        "contrast_augmentation": "Vary T1 contrast response to improve scanner robustness.",
         "ensure_typed": "Convert outputs to MONAI/Torch tensor-compatible types.",
     }
     common_steps = [name for name, _ in _build_common_oasis_steps(resolved_cfg)]

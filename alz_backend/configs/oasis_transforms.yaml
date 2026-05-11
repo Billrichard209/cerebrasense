@@ -44,3 +44,9 @@ augmentation:
   scale_range: [0.1, 0.1, 0.1]
   gaussian_noise_probability: 0.3
   gaussian_noise_std: 0.05
+  bias_field_probability: 0.25
+  bias_field_coeff_range: [0.0, 0.1]
+  gibbs_noise_probability: 0.1
+  gibbs_alpha: [0.0, 0.3]
+  contrast_probability: 0.3
+  contrast_gamma: [0.8, 1.2]

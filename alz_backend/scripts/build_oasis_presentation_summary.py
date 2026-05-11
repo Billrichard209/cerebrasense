@@ -77,10 +77,20 @@ def build_oasis_presentation_summary(
         productization_report_path,
         fallback=resolved_settings.outputs_root / "reports" / "productization" / "oasis_productization_status.json",
     )
+    oasis2_onboarding_path = (
+        resolved_settings.outputs_root / "reports" / "onboarding" / "current_oasis2_onboarding" / "oasis2_onboarding_bundle.json"
+    )
+    oasis2_upload_status_path = resolved_settings.outputs_root / "reports" / "onboarding" / "oasis2_upload_bundle_status.json"
+    oasis2_upload_summary_path = (
+        resolved_settings.outputs_root / "exports" / "oasis2_upload_bundle" / "backend_reference" / "oasis2_upload_bundle_summary.json"
+    )
 
     comparison_payload = _load_json(resolved_comparison_path)
     evidence_payload = _load_json(resolved_evidence_path)
     productization_payload = _load_json(resolved_productization_path)
+    oasis2_onboarding_payload = _load_json(oasis2_onboarding_path) if oasis2_onboarding_path.exists() else {}
+    oasis2_upload_status_payload = _load_json(oasis2_upload_status_path) if oasis2_upload_status_path.exists() else {}
+    oasis2_upload_summary_payload = _load_json(oasis2_upload_summary_path) if oasis2_upload_summary_path.exists() else {}
 
     active = dict(comparison_payload.get("active", {}))
     candidate = dict(comparison_payload.get("candidate", {}))
@@ -131,6 +141,17 @@ def build_oasis_presentation_summary(
         "If more training happens before new data arrives, prioritize stability-focused work like repeated-split refreshes or error analysis rather than random hyperparameter sweeps.",
         "When ready, refresh the Kaggle branch as a secondary benchmark, then move to OASIS-2 onboarding as the next major expansion.",
     ]
+    if oasis2_upload_summary_payload:
+        talking_points.append(
+            "A portable OASIS-2 upload bundle is now available for remote review and preprocessing, which keeps the longitudinal branch moving without mixing it into the active OASIS supervised baseline."
+        )
+        next_steps[-1] = (
+            "Keep OASIS-2 in the onboarding branch: use the uploaded bundle for remote review or preprocessing, validate it with the upload-bundle checker, and do not treat it as supervised training data until metadata coverage is explicit."
+        )
+    if oasis2_upload_status_payload.get("overall_status") not in {None, "pass"}:
+        risks_and_caveats.append(
+            "The current OASIS-2 upload bundle still has validation warnings, so remote review should use the saved upload-bundle status report before relying on it."
+        )
 
     return OASISPresentationSummary(
         generated_at=datetime.now(timezone.utc).isoformat(),
@@ -156,6 +177,10 @@ def build_oasis_presentation_summary(
             "productization_pass_count": productization_summary.get("pass"),
             "productization_fail_count": productization_summary.get("fail"),
             "cloud_local_alignment_note": "Imported candidate is available locally, but the active local baseline intentionally remains the older stronger run.",
+            "oasis2_onboarding_status": oasis2_onboarding_payload.get("readiness_status"),
+            "oasis2_upload_bundle_status": oasis2_upload_status_payload.get("overall_status"),
+            "oasis2_upload_included_session_count": oasis2_upload_summary_payload.get("included_session_count"),
+            "oasis2_upload_materialized_file_count": oasis2_upload_summary_payload.get("materialized_file_count"),
         },
         demo_assets={
             "active_bundle_root": dict(demo_bundles.get("active", {})).get("bundle_root"),
@@ -170,6 +195,9 @@ def build_oasis_presentation_summary(
             "comparison_report_path": str(resolved_comparison_path),
             "evidence_report_path": str(resolved_evidence_path),
             "productization_report_path": str(resolved_productization_path),
+            "oasis2_onboarding_bundle_path": str(oasis2_onboarding_path) if oasis2_onboarding_path.exists() else "",
+            "oasis2_upload_status_path": str(oasis2_upload_status_path) if oasis2_upload_status_path.exists() else "",
+            "oasis2_upload_summary_path": str(oasis2_upload_summary_path) if oasis2_upload_summary_path.exists() else "",
         },
     )
 

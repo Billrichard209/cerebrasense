@@ -63,7 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scheduler-patience", type=int, default=None)
     parser.add_argument("--scheduler-factor", type=float, default=None)
 
-    parser.add_argument("--loss", choices=["cross_entropy", "ce", "nll_loss", "nll"], default=None)
+    parser.add_argument("--loss", choices=["cross_entropy", "ce", "nll_loss", "nll", "focal_loss", "focal"], default=None)
+    parser.add_argument("--class-weights", nargs=2, type=float, default=None)
+    parser.add_argument("--focal-gamma", type=float, default=None)
 
     parser.add_argument("--early-stopping", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--early-stopping-patience", type=int, default=None)
@@ -116,7 +118,11 @@ def apply_cli_overrides(cfg: ResearchOASISTrainingConfig, args: argparse.Namespa
         patience=int(_coalesce(cfg.scheduler.patience, args.scheduler_patience)),
         factor=float(_coalesce(cfg.scheduler.factor, args.scheduler_factor)),
     )
-    loss = LossConfig(name=str(_coalesce(cfg.loss.name, args.loss)))
+    loss = LossConfig(
+        name=str(_coalesce(cfg.loss.name, args.loss)),
+        class_weights=tuple(args.class_weights) if args.class_weights is not None else cfg.loss.class_weights,
+        focal_gamma=float(_coalesce(cfg.loss.focal_gamma, args.focal_gamma)),
+    )
     early_stopping = EarlyStoppingConfig(
         enabled=bool(_coalesce(cfg.early_stopping.enabled, args.early_stopping)),
         patience=int(_coalesce(cfg.early_stopping.patience, args.early_stopping_patience)),

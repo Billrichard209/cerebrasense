@@ -52,15 +52,33 @@ def build_monai_classification_loss() -> object:
     return nn.CrossEntropyLoss()
 
 
-def build_classification_loss(name: str = "cross_entropy", **kwargs: Any) -> object:
+def build_classification_loss(
+    name: str = "cross_entropy",
+    *,
+    class_weights: tuple[float, ...] | list[float] | None = None,
+    device: str | None = None,
+    focal_gamma: float = 2.0,
+    **kwargs: Any,
+) -> object:
     """Build a configurable classification loss function."""
 
-    nn = _load_torch_symbols()["nn"]
+    symbols = _load_torch_symbols()
+    nn = symbols["nn"]
+    torch = symbols["torch"]
+    if class_weights is not None and "weight" not in kwargs:
+        kwargs["weight"] = torch.as_tensor(list(class_weights), dtype=torch.float32, device=device)
     normalized_name = name.strip().lower()
     if normalized_name in {"cross_entropy", "ce"}:
         return nn.CrossEntropyLoss(**kwargs)
     if normalized_name in {"nll_loss", "nll"}:
         return nn.NLLLoss(**kwargs)
+    if normalized_name in {"focal_loss", "focal"}:
+        from monai.losses import FocalLoss
+        if "to_onehot_y" not in kwargs:
+            kwargs["to_onehot_y"] = True
+        if "gamma" not in kwargs:
+            kwargs["gamma"] = focal_gamma
+        return FocalLoss(**kwargs)
     raise ValueError(f"Unsupported classification loss: {name}")
 
 

@@ -283,7 +283,12 @@ def run_research_oasis2_training(
         patience=cfg.scheduler.patience,
         factor=cfg.scheduler.factor,
     )
-    loss_function = build_classification_loss(cfg.loss.name)
+    loss_function = build_classification_loss(
+        cfg.loss.name,
+        class_weights=cfg.loss.class_weights,
+        device=device,
+        focal_gamma=cfg.loss.focal_gamma,
+    )
     scaler = _build_grad_scaler(torch, amp_enabled=amp_enabled)
     print("oasis2_trainer: building dataloaders", flush=True)
     loader_cfg, dataloaders = _build_loaders(cfg)

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CerebraSense | MRI Decision Support Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar glass">
+        <div class="brand">
+          <div class="brand-mark">CS</div>
+          <div>
+            <h1>CerebraSense</h1>
+            <p>Decision Support Demo</p>
+          </div>
+        </div>
+
+        <nav>
+          <button class="nav-item active">Overview</button>
+          <button class="nav-item">Scan Explorer</button>
+          <button class="nav-item">Longitudinal Trend</button>
+          <button class="nav-item">Explainability</button>
+          <button class="nav-item">Reports</button>
+        </nav>
+
+        <div class="notice">
+          <h2>Important</h2>
+          <p>
+            This demo supports research-oriented decision assistance and should
+            not be used as a standalone medical diagnosis tool.
+          </p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar glass">
+          <div>
+            <p class="eyebrow">Live prototype</p>
+            <h2>Structural MRI Review Workspace</h2>
+          </div>
+          <button id="refreshBtn" class="primary-btn">Refresh Simulation</button>
+        </header>
+
+        <section class="kpi-grid">
+          <article class="kpi glass">
+            <p>Risk Signal</p>
+            <h3 id="riskValue">0.74</h3>
+            <span class="trend up">+0.04 vs previous</span>
+          </article>
+          <article class="kpi glass">
+            <p>Hippocampal Volume</p>
+            <h3 id="hippoValue">5.8 cm&sup3;</h3>
+            <span class="trend down">-2.1% yearly trend</span>
+          </article>
+          <article class="kpi glass">
+            <p>Data Completeness</p>
+            <h3 id="dataValue">96%</h3>
+            <span class="trend up">All critical fields present</span>
+          </article>
+          <article class="kpi glass">
+            <p>Model Confidence</p>
+            <h3 id="confValue">88%</h3>
+            <span class="trend up">Stable over last 3 scans</span>
+          </article>
+        </section>
+
+        <section class="panel-grid">
+          <article class="panel glass">
+            <div class="panel-header">
+              <h3>Longitudinal Risk Trend</h3>
+              <p>Last 6 visits</p>
+            </div>
+            <canvas id="trendChart" width="700" height="220" aria-label="Risk trend chart"></canvas>
+          </article>
+
+          <article class="panel glass explainability">
+            <div class="panel-header">
+              <h3>Explainability Highlights</h3>
+              <p>Feature contribution snapshot</p>
+            </div>
+            <ul id="featureList"></ul>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

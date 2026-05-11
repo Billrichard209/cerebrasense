@@ -29,6 +29,8 @@ from .oasis2_supervised import (
 _load_monai_data_symbols = load_monai_data_symbols
 _load_torch_symbols = load_torch_symbols
 
+_MISSING_IMAGE_RESOLUTION_CACHE: dict[tuple[str, tuple[str, ...]], Path] = {}
+
 
 def _safe_optional_text(value: Any) -> str:
     """Return one MONAI-collate-safe optional text field."""
@@ -83,14 +85,74 @@ class OASIS2DataloaderBundle:
     train_sampler: object | None = None
 
 
-def _records_from_split_frame(frame: pd.DataFrame) -> list[dict[str, Any]]:
+def _oasis2_relative_suffix(image_path: Path) -> Path | None:
+    parts = image_path.parts
+    for index, part in enumerate(parts):
+        if part.startswith("OAS2_RAW_PART"):
+            return Path(*parts[index:])
+    return None
+
+
+def _candidate_oasis2_bundle_roots(settings: AppSettings) -> list[Path]:
+    exports_root = settings.outputs_root / "exports"
+    roots = [
+        settings.collection_root,
+        settings.project_root,
+        exports_root / "oasis2_upload_bundle_ready",
+        exports_root / "oasis2_upload_bundle",
+    ]
+    if exports_root.exists():
+        roots.extend(path for path in exports_root.glob("oasis2_upload_bundle*") if path.is_dir())
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root)
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def _resolve_oasis2_image_path(image_path: Path, *, search_roots: tuple[Path, ...]) -> Path:
+    if image_path.exists():
+        return image_path
+    suffix = _oasis2_relative_suffix(image_path)
+    if suffix is None:
+        raise FileNotFoundError(f"OASIS-2 split references a missing image path: {image_path}")
+
+    cache_key = (str(suffix), tuple(str(root) for root in search_roots))
+    cached = _MISSING_IMAGE_RESOLUTION_CACHE.get(cache_key)
+    if cached is not None and cached.exists():
+        return cached
+
+    for root in search_roots:
+        candidate = root / suffix
+        if candidate.exists():
+            _MISSING_IMAGE_RESOLUTION_CACHE[cache_key] = candidate
+            return candidate
+    for root in search_roots:
+        if not root.exists():
+            continue
+        matches = list(root.glob(f"**/{suffix.as_posix()}"))
+        if matches:
+            _MISSING_IMAGE_RESOLUTION_CACHE[cache_key] = matches[0]
+            return matches[0]
+    raise FileNotFoundError(
+        f"OASIS-2 split references a missing image path: {image_path}. "
+        f"Also checked bundle-relative suffix {suffix} under: {[str(root) for root in search_roots]}"
+    )
+
+
+def _records_from_split_frame(
+    frame: pd.DataFrame,
+    *,
+    search_roots: tuple[Path, ...] = (),
+) -> list[dict[str, Any]]:
     """Convert one OASIS-2 split frame into MONAI-friendly supervised records."""
 
     records: list[dict[str, Any]] = []
     for row in frame.itertuples(index=False):
-        image_path = Path(row.image)
-        if not image_path.exists():
-            raise FileNotFoundError(f"OASIS-2 split references a missing image path: {image_path}")
+        image_path = _resolve_oasis2_image_path(Path(row.image), search_roots=search_roots)
         label_value = int(float(row.label))
         subject_id = canonicalize_optional_string(getattr(row, "subject_id", None))
         session_id = canonicalize_optional_string(getattr(row, "session_id", None))
@@ -173,9 +235,10 @@ def build_oasis2_datasets(cfg: OASIS2LoaderConfig) -> OASIS2DatasetBundle:
         )
     )
 
-    train_records = _records_from_split_frame(split_artifacts.train_frame)
-    val_records = _records_from_split_frame(split_artifacts.val_frame)
-    test_records = _records_from_split_frame(split_artifacts.test_frame)
+    search_roots = tuple(_candidate_oasis2_bundle_roots(settings))
+    train_records = _records_from_split_frame(split_artifacts.train_frame, search_roots=search_roots)
+    val_records = _records_from_split_frame(split_artifacts.val_frame, search_roots=search_roots)
+    test_records = _records_from_split_frame(split_artifacts.test_frame, search_roots=search_roots)
     train_class_weights = _compute_class_weights(train_records)
 
     # Strip variable metadata for MONAI datasets — the training loop only uses
@@ -184,7 +247,18 @@ def build_oasis2_datasets(cfg: OASIS2LoaderConfig) -> OASIS2DatasetBundle:
     # when batch_size > 1.  Full records are still kept in the bundle for
     # analysis and reporting.
     def _collation_safe(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [{"image": r["image"], "label": r["label"]} for r in records]
+        return [
+            {
+                "image": r["image"],
+                "image_path": r["image_path"],
+                "label": r["label"],
+                "label_name": r["label_name"],
+                "subject_id": r["subject_id"],
+                "session_id": r["session_id"],
+                "split_group_key": r["split_group_key"],
+            }
+            for r in records
+        ]
 
     train_dataset = build_monai_dataset(
         _collation_safe(train_records),

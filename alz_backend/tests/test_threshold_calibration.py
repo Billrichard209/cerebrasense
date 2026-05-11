@@ -48,3 +48,26 @@ def test_calibrate_binary_threshold_writes_reports(tmp_path) -> None:
     assert result.test_metrics_path is not None
     assert result.test_metrics_path.exists()
     assert 0.0 <= result.threshold <= 1.0
+
+
+def test_calibrate_binary_threshold_supports_youden_index(tmp_path) -> None:
+    """Youden index should be available for sensitivity/specificity threshold tuning."""
+
+    val_path = tmp_path / "val_predictions.csv"
+    pd.DataFrame(
+        {
+            "true_label": [0, 0, 1, 1],
+            "probability_class_1": [0.1, 0.3, 0.6, 0.8],
+        }
+    ).to_csv(val_path, index=False)
+
+    result = calibrate_binary_threshold(
+        validation_predictions_path=val_path,
+        output_dir=tmp_path / "calibration",
+        selection_metric="youden_index",
+        threshold_step=0.1,
+    )
+
+    assert result.selection_metric == "youden_index"
+    assert result.validation_metrics["sensitivity"] == 1.0
+    assert result.validation_metrics["specificity"] == 1.0
