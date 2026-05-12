@@ -230,3 +230,61 @@ def build_and_save_longitudinal_report(
     report = build_longitudinal_report(records, subject_id=subject_id, feature_configs=feature_configs)
     output_path = save_longitudinal_report(report, settings=settings, file_stem=file_stem)
     return report, output_path
+
+
+def apply_temporal_smoothing(
+    probabilities: list[float],
+    *,
+    alpha: float = 0.5,
+    monotonic_constraint: bool = True,
+    decay_factor: float = 0.05,
+) -> list[float]:
+    """Apply Subject-Level Smoothing to a sequence of chronological probabilities."""
+    if not probabilities:
+        return []
+        
+    smoothed = [probabilities[0]]
+    
+    for i in range(1, len(probabilities)):
+        raw_p = probabilities[i]
+        prev_s = smoothed[i-1]
+        
+        # Exponential Moving Average
+        s = alpha * raw_p + (1 - alpha) * prev_s
+        
+        # Monotonic Constraint (Alzheimer's risk shouldn't drop significantly)
+        if monotonic_constraint:
+            if s < prev_s - decay_factor:
+                # Force the score to stay biologically plausible
+                s = prev_s - decay_factor
+                
+        smoothed.append(round(s, 4))
+        
+    return smoothed
+
+
+def detect_change_point(smoothed_probabilities: list[float], threshold_delta: float = 0.20) -> int | None:
+    """Identify the visit index where significant decline begins.
+    
+    Args:
+        smoothed_probabilities: A chronological list of smoothed model predictions.
+        threshold_delta: The minimum probability jump required to flag a change point.
+        
+    Returns:
+        The integer index of the visit where decline starts, or None if stable.
+    """
+    if len(smoothed_probabilities) < 2:
+        return None
+        
+    # Baseline is defined as the average of the first two visits (if available) or just the first.
+    baseline = smoothed_probabilities[0]
+    
+    for i in range(1, len(smoothed_probabilities)):
+        if smoothed_probabilities[i] - baseline >= threshold_delta:
+            return i # This visit marks the significant shift
+            
+        # Update baseline slightly if we are still stable, to prevent slow drift from triggering it
+        if smoothed_probabilities[i] - baseline < 0.05:
+            baseline = (baseline + smoothed_probabilities[i]) / 2.0
+            
+    return None
