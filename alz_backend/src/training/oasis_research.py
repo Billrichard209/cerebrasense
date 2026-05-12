@@ -76,6 +76,7 @@ class LossConfig:
     name: str = "cross_entropy"
     class_weights: tuple[float, ...] | None = None
     focal_gamma: float = 2.0
+    temporal_lambda: float = 0.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -395,6 +396,8 @@ def _run_epoch(
     amp_enabled: bool,
     max_batches: int | None,
     gradient_accumulation_steps: int,
+    temporal_lambda: float = 0.0,
+    monotonicity_loss_fn: object | None = None,
 ) -> dict[str, Any]:
     """Run one train or validation epoch and return metrics-ready predictions."""
 
@@ -423,7 +426,18 @@ def _run_epoch(
 
             with _autocast_context(torch, device=device, amp_enabled=amp_enabled):
                 logits = model(inputs)
-                loss = loss_function(logits, labels)
+                primary_loss = loss_function(logits, labels)
+                
+                loss = primary_loss
+                if temporal_lambda > 0 and monotonicity_loss_fn is not None:
+                    # subject_id and visit_number are expected in batch metadata
+                    s_ids = batch.get("subject_id")
+                    v_nums = batch.get("visit_number")
+                    if s_ids is not None and v_nums is not None:
+                        probs = torch.softmax(logits, dim=1)[:, 1]
+                        t_loss = monotonicity_loss_fn(probs, s_ids, v_nums)
+                        loss = primary_loss + (temporal_lambda * t_loss)
+
                 backward_loss = loss / accumulation_steps if training and accumulation_steps > 1 else loss
 
             if training:
@@ -756,6 +770,9 @@ def run_research_oasis_training(
     if cfg.checkpoint.resume_from is not None:
         print(f"Resuming from checkpoint {cfg.checkpoint.resume_from} at epoch {start_epoch}")
 
+    from .trainer_utils import MonotonicityLoss
+    monotonicity_loss_fn = MonotonicityLoss()
+
     for epoch in range(start_epoch, cfg.epochs + 1):
         train_metrics = _run_epoch(
             loader=dataloaders.train_loader,
@@ -768,6 +785,8 @@ def run_research_oasis_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_train_batches,
             gradient_accumulation_steps=cfg.data.gradient_accumulation_steps,
+            temporal_lambda=cfg.loss.temporal_lambda,
+            monotonicity_loss_fn=monotonicity_loss_fn,
         )
         val_metrics = _run_epoch(
             loader=dataloaders.val_loader,
@@ -780,6 +799,8 @@ def run_research_oasis_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_val_batches,
             gradient_accumulation_steps=1,
+            temporal_lambda=cfg.loss.temporal_lambda,
+            monotonicity_loss_fn=monotonicity_loss_fn,
         )
         final_val_metrics = val_metrics
         learning_rate = float(optimizer.param_groups[0]["lr"])

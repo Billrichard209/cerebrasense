@@ -82,6 +82,45 @@ def build_classification_loss(
     raise ValueError(f"Unsupported classification loss: {name}")
 
 
+class MonotonicityLoss(symbols["nn"].Module) if "torch" in locals() or "_load_torch_symbols" in globals() else object:
+    """
+    Penalizes violations of temporal monotonicity in risk predictions.
+    If P(visit_i) > P(visit_i+1) + margin, a penalty is applied.
+    """
+
+    def __init__(self, margin: float = 0.05):
+        symbols = _load_torch_symbols()
+        nn = symbols["nn"]
+        super().__init__()
+        self.margin = margin
+        self.relu = nn.ReLU()
+
+    def forward(self, probabilities, subject_ids, visit_numbers):
+        symbols = _load_torch_symbols()
+        torch = symbols["torch"]
+        loss = torch.tensor(0.0, device=probabilities.device)
+        count = 0
+        
+        # Look for pairs of the same subject in the batch
+        for i in range(len(subject_ids)):
+            for j in range(i + 1, len(subject_ids)):
+                if subject_ids[i] == subject_ids[j] and subject_ids[i] is not None:
+                    # Check visit order
+                    if visit_numbers[i] < visit_numbers[j]:
+                        # Violation if risk at early visit > risk at later visit
+                        violation = probabilities[i] - probabilities[j]
+                        if violation > -self.margin:
+                            loss = loss + self.relu(violation + self.margin)
+                            count += 1
+                    elif visit_numbers[i] > visit_numbers[j]:
+                        violation = probabilities[j] - probabilities[i]
+                        if violation > -self.margin:
+                            loss = loss + self.relu(violation + self.margin)
+                            count += 1
+                            
+        return loss / (count + 1e-6)
+
+
 def build_monai_adam_optimizer(
     model: object,
     *,
