@@ -148,6 +148,32 @@ class OASISStructuralLongitudinalResponse(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class OASISRiskTimelinePoint(BaseModel):
+    """A single data point in a longitudinal risk timeline."""
+
+    visit_order: int
+    session_id: str
+    scan_timestamp: str | None = None
+    raw_probability: float
+    smoothed_probability: float
+    is_paradox: bool = False
+    is_change_point: bool = False
+
+
+class OASISRiskTimelineResponse(BaseModel):
+    """Subject-level longitudinal risk analysis with smoothing and change-point detection."""
+
+    subject_id: str
+    timeline: list[OASISRiskTimelinePoint] = Field(default_factory=list)
+    change_point_index: int | None = None
+    clinical_status: str
+    mean_risk: float
+    risk_velocity: float
+    paradox_count: int
+    recommendation: str
+    disclaimer: str
+
+
 class ModelMetadataResponse(BaseModel):
     """Metadata for the active OASIS baseline model config."""
 

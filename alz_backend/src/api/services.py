@@ -11,7 +11,11 @@ from src.data.registry import build_dataset_registry_snapshot
 from src.explainability.gradcam import ExplainScanConfig, explain_scan
 from src.inference.serving import load_backend_serving_config
 from src.inference.pipeline import PredictScanOptions, predict_scan
-from src.longitudinal.service import build_and_save_longitudinal_report
+from src.longitudinal.service import (
+    apply_temporal_smoothing,
+    build_and_save_longitudinal_report,
+    detect_change_point,
+)
 from src.longitudinal.structural import (
     build_oasis_structural_longitudinal_summary,
     save_structural_longitudinal_report,
@@ -36,7 +40,8 @@ from src.utils.io_utils import ensure_directory
 from src.volumetrics.service import analyze_oasis_volume
 
 from .schemas import (
-    LongitudinalReportRequest,
+    OASISRiskTimelinePoint,
+    OASISRiskTimelineResponse,
     ReviewResolutionRequest,
     ScanExplanationRequest,
     ScanPredictionRequest,
@@ -622,6 +627,81 @@ def build_oasis_longitudinal_structural_payload(
         max_timepoints=max_timepoints,
     )
     return summary.to_payload()
+
+
+def build_oasis_risk_timeline_payload(
+    subject_id: str,
+    *,
+    manifest_path: str | None = None,
+) -> dict[str, object]:
+    """Build a subject-level longitudinal risk analysis payload with smoothing."""
+
+    from src.longitudinal.tracker import load_subject_longitudinal_records
+    from src.security.disclaimers import STANDARD_DECISION_SUPPORT_DISCLAIMER
+
+    settings = get_app_settings()
+    records = load_subject_longitudinal_records(
+        subject_id,
+        settings=settings,
+        manifest_path=Path(manifest_path) if manifest_path is not None else None,
+    )
+
+    if not records:
+        raise LookupError(f"No longitudinal records found for subject: {subject_id}")
+
+    # Extract raw probabilities
+    raw_probs = [r.get_probability_for_active_model() for r in records]
+    
+    # Apply smoothing
+    smoothed_probs = apply_temporal_smoothing(raw_probs)
+    
+    # Detect change point
+    cp_idx = detect_change_point(smoothed_probs)
+    
+    # Detect paradoxes
+    paradox_count = 0
+    timeline = []
+    for i, r in enumerate(records):
+        is_paradox = False
+        if i > 0 and raw_probs[i] < raw_probs[i-1] - 0.1:
+            is_paradox = True
+            paradox_count += 1
+            
+        timeline.append(
+            OASISRiskTimelinePoint(
+                visit_order=r.visit_order,
+                session_id=r.session_id,
+                scan_timestamp=r.scan_timestamp,
+                raw_probability=raw_probs[i],
+                smoothed_probability=smoothed_probs[i],
+                is_paradox=is_paradox,
+                is_change_point=(i == cp_idx)
+            )
+        )
+
+    # Determine status
+    risk_velocity = (smoothed_probs[-1] - smoothed_probs[0]) / len(records) if len(records) > 1 else 0.0
+    status = "Stable"
+    recommendation = "Routine monitoring."
+    
+    if smoothed_probs[-1] > 0.7:
+        status = "High Risk"
+        recommendation = "Clinical correlation recommended."
+    elif risk_velocity > 0.05:
+        status = "Progressing"
+        recommendation = "Closer monitoring intervals advised."
+
+    return OASISRiskTimelineResponse(
+        subject_id=subject_id,
+        timeline=timeline,
+        change_point_index=cp_idx,
+        clinical_status=status,
+        mean_risk=sum(smoothed_probs) / len(smoothed_probs),
+        risk_velocity=risk_velocity,
+        paradox_count=paradox_count,
+        recommendation=recommendation,
+        disclaimer=STANDARD_DECISION_SUPPORT_DISCLAIMER
+    ).model_dump()
 
 
 def build_saved_longitudinal_report_payload(request: LongitudinalReportRequest) -> dict[str, object]:

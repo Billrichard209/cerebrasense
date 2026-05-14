@@ -5,8 +5,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from src.api.auth import AuthContext, require_api_key
-from src.api.schemas import LongitudinalReportRequest, LongitudinalReportResponse, OASISStructuralLongitudinalResponse
-from src.api.services import build_oasis_longitudinal_structural_payload, build_saved_longitudinal_report_payload
+from src.api.schemas import (
+    LongitudinalReportRequest,
+    LongitudinalReportResponse,
+    OASISRiskTimelineResponse,
+    OASISStructuralLongitudinalResponse,
+)
+from src.api.services import (
+    build_oasis_longitudinal_structural_payload,
+    build_oasis_risk_timeline_payload,
+    build_saved_longitudinal_report_payload,
+)
 
 router = APIRouter(tags=["longitudinal"])
 
@@ -42,3 +51,22 @@ def build_longitudinal_report_route(
     """Generate and save a timeline-ready longitudinal report for a subject."""
 
     return LongitudinalReportResponse(**build_saved_longitudinal_report_payload(request))
+
+
+@router.get(
+    "/longitudinal/oasis/{subject_id}/risk",
+    response_model=OASISRiskTimelineResponse,
+)
+def oasis_longitudinal_risk(
+    subject_id: str,
+    manifest_path: str | None = None,
+    _auth: AuthContext = Depends(require_api_key),
+) -> OASISRiskTimelineResponse:
+    """Return subject-level smoothed risk timeline with paradox detection."""
+
+    return OASISRiskTimelineResponse(
+        **build_oasis_risk_timeline_payload(
+            subject_id=subject_id,
+            manifest_path=manifest_path,
+        )
+    )
