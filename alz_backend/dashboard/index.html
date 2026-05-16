@@ -394,7 +394,8 @@
 
         async function init() {
             try {
-                const response = await fetch('/api/data');
+                // Point to the new high-quality FastAPI port
+                const response = await fetch('http://localhost:8000/api/data');
                 dashboardData = await response.json();
                 
                 document.getElementById('totalSubjects').innerText = dashboardData.summary.total_subjects;
@@ -409,7 +410,12 @@
                 document.getElementById('loading').style.display = 'none';
             } catch (error) {
                 console.error('Init failed:', error);
-                alert('Connection to CerebraSense Backend failed.');
+                document.getElementById('loading').innerHTML = `
+                    <div style="text-align:center">
+                        <h2 style="color:var(--danger)">Backend Offline</h2>
+                        <p style="color:var(--text-muted); margin-top:12px">Please run: <code>uvicorn dashboard.app:app --reload</code></p>
+                    </div>
+                `;
             }
         }
 
@@ -539,11 +545,17 @@
             formData.append('mmse', '24');
 
             try {
-                const response = await fetch('/api/predict', { method: 'POST', body: formData });
-                const data = await response.json();
+                const response = await fetch('http://localhost:8000/api/predict', { 
+                    method: 'POST', 
+                    body: formData 
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Inference failed');
+                }
 
-                loading.style.display = 'none';
-                result.style.display = 'block';
+                const data = await response.json();
 
                 const prob = Math.round(data.probability_score * 100);
                 document.getElementById('resLabel').innerText = data.label_name;
