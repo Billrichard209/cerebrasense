@@ -346,6 +346,14 @@
                     <div style="height: 450px;">
                         <canvas id="riskChart"></canvas>
                     </div>
+
+                    <!-- AI Clinical Narrative Section -->
+                    <div class="viz-panel" style="margin-top: 32px; padding: 24px;">
+                        <h4 style="font-size: 14px; margin-bottom: 16px; color: var(--accent); letter-spacing: 1px;">AI PHYSICIAN SCRIBE REPORT</h4>
+                        <div id="scribeReport" style="line-height: 1.8; color: var(--text-main); font-size: 15px; white-space: pre-line; border-left: 2px solid var(--primary); padding-left: 20px;">
+                            Select a patient to generate report...
+                        </div>
+                    </div>
                 </div>
 
                 <div class="clinical-panel">
@@ -454,6 +462,10 @@
             document.getElementById('valHippo').innerText = `${biomarkers.hippo_vol_mm3.toLocaleString()} mm³`;
             document.getElementById('valTiv').innerText = `${biomarkers.tiv_mm3.toLocaleString()} mm³`;
             document.getElementById('valRatio').innerText = (biomarkers.normalized_ratio * 100).toFixed(2) + '%';
+            
+            // AI Scribe
+            const scribeReport = patient.clinical_summary || "No automated report available for this session.";
+            document.getElementById('scribeReport').innerText = scribeReport;
             
             document.getElementById('activeBadges').innerHTML = `
                 <span class="badge ${badgeClass}">${patient.status}</span>

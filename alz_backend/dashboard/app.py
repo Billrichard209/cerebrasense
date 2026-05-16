@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.inference.pipeline import predict_scan, PredictScanOptions
 from src.inference.dashboard_utils import load_dashboard_data
 from src.explainability.gradcam import explain_scan, ExplainScanConfig
+from src.inference.scribe import ClinicalScribe
 from src.configs.runtime import get_app_settings
 
 # --- Models ---
@@ -136,6 +137,17 @@ async def analyze_mri(
 
         result["gradcam_base64"] = gradcam_base64
         result["explanation_report"] = explanation.payload
+        
+        # 4. Generate AI Clinical Narrative
+        summary = ClinicalScribe.generate_summary(
+            patient_id=file.filename,
+            risk_score=result["probability_score"],
+            label=result["label_name"],
+            velocity=result.get("velocity", 0.0),
+            biomarkers=result["biomarkers"],
+            clinical_meta={"age": clinical.age, "mmse": clinical.mmse}
+        )
+        result["clinical_summary"] = summary
         
         return result
 
