@@ -39,15 +39,28 @@ class ExtractClinicalFeaturesd:
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         d = dict(data)
         meta = d.get(self.keys[0], {})
-        oasis_meta = meta.get("oasis2_metadata", {})
+        
+        # Safely handle missing metadata by providing defaults
+        oasis_meta = meta.get("oasis2_metadata", {}) if isinstance(meta, dict) else {}
+        
+        # If meta is missing entirely or not a dict, we might still have keys in the top-level 
+        # but the spec says it should be in oasis2_metadata.
         
         age = float(oasis_meta.get("age_at_visit") or 70.0) / 100.0
-        sex_str = str(oasis_meta.get("sex")).lower()
+        sex_val = oasis_meta.get("sex")
+        sex_str = str(sex_val).lower() if sex_val is not None else "f"
         sex = 1.0 if sex_str == "m" else 0.0
-        mmse = float(oasis_meta.get("mmse") or 25.0) / 30.0
+        mmse = float(oasis_meta.get("mmse") or 27.0) / 30.0
         
         import torch
         d[self.output_key] = torch.tensor([age, sex, mmse], dtype=torch.float32)
+        
+        # IMPORTANT: Remove the variable-length meta dictionary to avoid KeyError 
+        # during batch collation when batch_size > 1.
+        for key in self.keys:
+            if key in d:
+                del d[key]
+                
         return d
 
 
