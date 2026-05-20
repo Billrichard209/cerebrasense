@@ -163,7 +163,9 @@ const state = {
     coronal: 48,
     sagittal: 48
   },
-  hoveredPoint: null
+  hoveredPoint: null,
+  researchPayload: null,
+  researchPayloadLoaded: false
 };
 
 // Helper constants
@@ -177,6 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initLongitudinalControls();
   initAnalysisSimulation();
   initReportExport();
+  initResearchModeBridge();
   
   // Perform first render cycle
   triggerFullRender();
@@ -211,7 +214,7 @@ function initRouter() {
   document.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
     
-    const pages = ['overview', 'scan-explorer', 'longitudinal', 'explainability', 'reports'];
+    const pages = ['overview', 'research-mode', 'scan-explorer', 'longitudinal', 'explainability', 'reports'];
     let idx = pages.indexOf(state.activePage);
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -249,6 +252,7 @@ function switchPage(pageId) {
   // Update topbar title based on active page
   const titles = {
     'overview': 'Structural MRI Review Workspace',
+    'research-mode': 'Research Model Board',
     'scan-explorer': 'High-Resolution MRI Scan Explorer',
     'longitudinal': 'Multi-Metric Longitudinal Tracking',
     'explainability': 'Clinical Explainability & Feature Attributions',
@@ -259,6 +263,8 @@ function switchPage(pageId) {
   // Redraw canvases depending on the active page
   if (pageId === 'overview') {
     renderTrendChart();
+  } else if (pageId === 'research-mode') {
+    renderResearchMode();
   } else if (pageId === 'scan-explorer') {
     renderAllMRIPlanes();
   } else if (pageId === 'longitudinal') {
@@ -1533,6 +1539,108 @@ function initReportExport() {
 }
 
 // ── 14. Trigger Full Component Render Cycle ──────────────
+// Research Mode reads generated backend artifacts when available.
+async function initResearchModeBridge() {
+  try {
+    const response = await fetch("./data/research_mode.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`research payload ${response.status}`);
+    state.researchPayload = await response.json();
+    state.researchPayloadLoaded = true;
+  } catch (error) {
+    state.researchPayload = null;
+    state.researchPayloadLoaded = false;
+  }
+  renderResearchMode();
+}
+
+function formatMetric(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  return Number(value).toFixed(3);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderResearchMode() {
+  const payload = state.researchPayload;
+  const status = document.getElementById("researchStatus");
+  const activeModel = document.getElementById("researchActiveModel");
+  const oasis2Model = document.getElementById("researchOasis2Model");
+  const activeAuroc = document.getElementById("researchActiveAuroc");
+  const oasis2Auroc = document.getElementById("researchOasis2Auroc");
+  const reviewCount = document.getElementById("researchReviewCount");
+  const summary = document.getElementById("researchProgressionSummary");
+  const list = document.getElementById("researchProgressionList");
+  const disclaimer = document.getElementById("researchDisclaimer");
+  if (!status || !list) return;
+
+  if (!payload) {
+    status.textContent = "Awaiting generated research payload";
+    activeModel.textContent = "OASIS-1 stable baseline";
+    oasis2Model.textContent = "OASIS-2 pending evaluation";
+    activeAuroc.textContent = "--";
+    oasis2Auroc.textContent = "--";
+    reviewCount.textContent = "--";
+    summary.textContent = "Run build_next_level_artifacts.py to load model evidence.";
+    disclaimer.textContent = "Research decision-support only. Not diagnosis.";
+    list.innerHTML = `
+      <div class="research-empty">
+        <strong>No generated cases loaded</strong>
+        <span>Frontend remains in safe simulated mode until backend artifacts exist.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const active = payload.active_model || {};
+  const oasis2 = payload.oasis2_candidate || {};
+  const progression = payload.progression || {};
+  const subjects = progression.top_subjects || [];
+
+  status.textContent = payload.headline || "Generated research payload loaded";
+  activeModel.textContent = active.run_name || "OASIS-1 stable baseline";
+  oasis2Model.textContent = oasis2.run_name || "OASIS-2 pending evaluation";
+  activeAuroc.textContent = formatMetric(active.auroc);
+  oasis2Auroc.textContent = formatMetric(oasis2.auroc);
+  reviewCount.textContent = String(active.review_required_count ?? progression.high_priority_subject_count ?? "--");
+  summary.textContent = `${progression.subject_count || 0} subjects, ${progression.temporal_paradox_count || 0} temporal paradox flags, ${progression.high_priority_subject_count || 0} high-priority reviews`;
+  disclaimer.textContent = payload.decision_support_note || "Research decision-support only. Not diagnosis.";
+
+  if (!subjects.length) {
+    list.innerHTML = `
+      <div class="research-empty">
+        <strong>No priority subjects</strong>
+        <span>OASIS-2 predictions were not found or produced no progression cases.</span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = subjects.map(subject => `
+    <div class="research-case">
+      <div>
+        <strong>${escapeHtml(subject.subject_id)}</strong>
+        <span>${escapeHtml(subject.session_count)} visits</span>
+      </div>
+      <div>
+        <span>Risk delta</span>
+        <strong>${formatMetric(subject.risk_delta)}</strong>
+      </div>
+      <div>
+        <span>Paradox</span>
+        <strong>${escapeHtml(subject.temporal_paradox_count)}</strong>
+      </div>
+      <span class="research-status-pill">${subject.high_priority ? "Review" : "Track"}</span>
+    </div>
+  `).join("");
+}
+
 function triggerFullRender() {
   const patient = patients[state.activePatient];
   
@@ -1551,8 +1659,11 @@ function triggerFullRender() {
   
   // 5. Build Reports Page details
   renderClinicalReport(patient);
+
+  // 6. Render generated model-board payload if present
+  renderResearchMode();
   
-  // 6. Draw scan explorer canvases (if active)
+  // 7. Draw scan explorer canvases (if active)
   if (state.activePage === 'scan-explorer') {
     renderAllMRIPlanes();
   }

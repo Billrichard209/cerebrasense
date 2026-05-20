@@ -95,6 +95,7 @@ class CheckpointConfig:
     """Checkpointing settings."""
 
     resume_from: Path | None = None
+    init_from_checkpoint: Path | None = None
     save_best: bool = True
     save_last: bool = True
 
@@ -213,6 +214,7 @@ def _merge_training_config(default_config: ResearchOASISTrainingConfig, override
     checkpoint_section = dict(asdict(default_config.checkpoint))
     checkpoint_section.update(overrides.get("checkpoint", {}))
     checkpoint_section["resume_from"] = _optional_path(checkpoint_section.get("resume_from"))
+    checkpoint_section["init_from_checkpoint"] = _optional_path(checkpoint_section.get("init_from_checkpoint"))
 
     model_section = dict(asdict(default_config.model))
     model_section.update(overrides.get("model", {}))
@@ -287,6 +289,85 @@ def _apply_dry_run_overrides(cfg: ResearchOASISTrainingConfig) -> ResearchOASIST
     )
 
 
+def _extract_checkpoint_state_dict(payload: Any) -> dict[str, Any]:
+    """Return a model state dict from raw or research checkpoint payloads."""
+
+    if not isinstance(payload, dict):
+        raise ResearchTrainingError(f"Unsupported checkpoint payload type: {type(payload)!r}")
+    if "model_state_dict" in payload:
+        state_dict = payload["model_state_dict"]
+    else:
+        state_dict = payload
+    if not isinstance(state_dict, dict):
+        raise ResearchTrainingError("Checkpoint model_state_dict must be a dictionary.")
+    return state_dict
+
+
+def _candidate_pretrain_keys(source_key: str) -> tuple[str, ...]:
+    """Return likely target keys for a source checkpoint key."""
+
+    candidates = [source_key]
+    for prefix in ("backbone.", "module."):
+        if source_key.startswith(prefix):
+            candidates.append(source_key[len(prefix) :])
+    if source_key.startswith("densenet."):
+        candidates.append(source_key[len("densenet.") :])
+    else:
+        candidates.append(f"densenet.{source_key}")
+    return tuple(dict.fromkeys(candidates))
+
+
+def _load_shape_compatible_pretrain(
+    *,
+    model: object,
+    checkpoint_path: Path,
+    torch: object,
+    device: str,
+) -> dict[str, Any]:
+    """Load matching checkpoint tensors without requiring identical heads."""
+
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Initial checkpoint not found: {checkpoint_path}")
+
+    source_state = _extract_checkpoint_state_dict(torch.load(checkpoint_path, map_location=device))
+    target_state = model.state_dict()
+    compatible: dict[str, Any] = {}
+    skipped: list[str] = []
+    used_source_keys: set[str] = set()
+
+    for source_key, source_value in source_state.items():
+        if not hasattr(source_value, "shape"):
+            skipped.append(str(source_key))
+            continue
+        matched_key = None
+        for candidate_key in _candidate_pretrain_keys(str(source_key)):
+            target_value = target_state.get(candidate_key)
+            if target_value is not None and tuple(target_value.shape) == tuple(source_value.shape):
+                matched_key = candidate_key
+                break
+        if matched_key is None:
+            skipped.append(str(source_key))
+            continue
+        compatible[matched_key] = source_value
+        used_source_keys.add(str(source_key))
+
+    if not compatible:
+        raise ResearchTrainingError(
+            f"No shape-compatible tensors found in initial checkpoint: {checkpoint_path}"
+        )
+
+    merged_state = dict(target_state)
+    merged_state.update(compatible)
+    model.load_state_dict(merged_state)
+    return {
+        "checkpoint_path": str(checkpoint_path),
+        "loaded_tensor_count": len(compatible),
+        "skipped_tensor_count": len(skipped),
+        "loaded_target_keys": sorted(compatible.keys()),
+        "used_source_keys": sorted(used_source_keys),
+    }
+
+
 def build_run_paths(settings: AppSettings, run_name: str) -> ResearchRunPaths:
     """Create and return the run folder structure under outputs/runs/oasis."""
 
@@ -335,6 +416,9 @@ def _save_resolved_config(
     payload["training"]["model_config_path"] = str(cfg.model_config_path) if cfg.model_config_path else None
     payload["training"]["checkpoint"]["resume_from"] = (
         str(cfg.checkpoint.resume_from) if cfg.checkpoint.resume_from else None
+    )
+    payload["training"]["checkpoint"]["init_from_checkpoint"] = (
+        str(cfg.checkpoint.init_from_checkpoint) if cfg.checkpoint.init_from_checkpoint else None
     )
     paths.resolved_config_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -752,6 +836,20 @@ def run_research_oasis_training(
     device = _resolve_device(cfg.device, torch)
     amp_enabled = bool(cfg.mixed_precision and device.startswith("cuda"))
     model = build_model(model_cfg).to(device)
+    pretrain_summary = None
+    if cfg.checkpoint.init_from_checkpoint is not None and cfg.checkpoint.resume_from is None:
+        pretrain_summary = _load_shape_compatible_pretrain(
+            model=model,
+            checkpoint_path=cfg.checkpoint.init_from_checkpoint,
+            torch=torch,
+            device=device,
+        )
+        print(
+            "Initialized model from checkpoint "
+            f"{cfg.checkpoint.init_from_checkpoint} "
+            f"(loaded_tensors={pretrain_summary['loaded_tensor_count']}, "
+            f"skipped_tensors={pretrain_summary['skipped_tensor_count']})"
+        )
     optimizer = build_optimizer(
         model,
         name=cfg.optimizer.name,

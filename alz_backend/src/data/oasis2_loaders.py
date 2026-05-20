@@ -254,6 +254,7 @@ def build_oasis2_datasets(cfg: OASIS2LoaderConfig) -> OASIS2DatasetBundle:
                 # We include these as strings; they are consistent across all records
                 "subject_id": r["subject_id"],
                 "session_id": r["session_id"],
+                "visit_number": -1 if r["visit_number"] is None else int(r["visit_number"]),
                 "split_group_key": r["split_group_key"],
                 # We include the meta dict here so the transform can use it, 
                 # but the transform will remove it before collation happens.

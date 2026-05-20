@@ -59,6 +59,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             <span>Overview</span>
           </button>
+          <button class="nav-item" data-page="research-mode" aria-label="Research Mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/><circle cx="8" cy="15" r="1"/><circle cx="11" cy="11" r="1"/><circle cx="14" cy="13" r="1"/><circle cx="18" cy="7" r="1"/></svg>
+            <span>Research Mode</span>
+          </button>
           <button class="nav-item" data-page="scan-explorer" aria-label="Scan Explorer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><path d="M12 3a15 15 0 0 1 4 9 15 15 0 0 1-4 9"/><path d="M12 3a15 15 0 0 0-4 9 15 15 0 0 0 4 9"/></svg>
             <span>Scan Explorer</span>
@@ -184,6 +188,44 @@
               </div>
               <ul id="featureList" aria-label="Feature importance breakdown"></ul>
             </article>
+          </section>
+        </div>
+
+
+        <!-- Research Mode -->
+        <div class="page-view" id="page-research-mode">
+          <section class="research-grid" aria-label="Generated model evidence">
+            <article class="panel glass research-panel">
+              <div class="panel-header">
+                <h3>Model Board</h3>
+                <p id="researchStatus">Awaiting generated research payload</p>
+              </div>
+              <div class="research-model-row">
+                <span>Active track</span>
+                <strong id="researchActiveModel">OASIS-1 stable baseline</strong>
+              </div>
+              <div class="research-model-row">
+                <span>Longitudinal candidate</span>
+                <strong id="researchOasis2Model">OASIS-2 pending evaluation</strong>
+              </div>
+              <div class="research-metric-strip">
+                <div><span>Active AUROC</span><strong id="researchActiveAuroc">--</strong></div>
+                <div><span>OASIS-2 AUROC</span><strong id="researchOasis2Auroc">--</strong></div>
+                <div><span>Review cases</span><strong id="researchReviewCount">--</strong></div>
+              </div>
+            </article>
+
+            <article class="panel glass research-panel">
+              <div class="panel-header">
+                <h3>Progression Panel</h3>
+                <p id="researchProgressionSummary">No generated OASIS-2 case panel loaded</p>
+              </div>
+              <div class="research-card-list" id="researchProgressionList"></div>
+            </article>
+          </section>
+
+          <section class="panel glass research-disclaimer">
+            <p id="researchDisclaimer">Research decision-support only. Not diagnosis.</p>
           </section>
         </div>
 

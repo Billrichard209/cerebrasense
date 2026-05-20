@@ -15,6 +15,7 @@ from src.training.oasis_research import (
     EarlyStoppingConfig,
     ResearchDataConfig,
     ResearchOASISTrainingConfig,
+    _load_shape_compatible_pretrain,
     _resolve_monitor_value,
     build_run_paths,
     load_research_oasis_training_config,
@@ -64,7 +65,10 @@ early_stopping:
   monitor: val_auroc
   mode: max
 checkpoint:
+  init_from_checkpoint: oasis1_best.pt
   resume_from: checkpoint.pt
+loss:
+  temporal_lambda: 0.25
 """,
         encoding="utf-8",
     )
@@ -83,6 +87,44 @@ checkpoint:
     assert cfg.early_stopping.monitor == "val_auroc"
     assert cfg.early_stopping.mode == "max"
     assert cfg.checkpoint.resume_from == Path("checkpoint.pt")
+    assert cfg.checkpoint.init_from_checkpoint == Path("oasis1_best.pt")
+    assert cfg.loss.temporal_lambda == pytest.approx(0.25)
+
+
+def test_shape_compatible_pretrain_loads_matching_backbone_keys(tmp_path: Path) -> None:
+    """Pretraining should reuse compatible tensors without forcing identical model heads."""
+
+    torch = pytest.importorskip("torch")
+    model = torch.nn.Sequential(torch.nn.Linear(3, 2), torch.nn.Linear(2, 2))
+    with torch.no_grad():
+        model[0].weight.zero_()
+        model[0].bias.zero_()
+
+    source_weight = torch.full_like(model[0].weight, 0.42)
+    source_bias = torch.full_like(model[0].bias, 0.24)
+    checkpoint_path = tmp_path / "pretrain.pt"
+    torch.save(
+        {
+            "model_state_dict": {
+                "densenet.0.weight": source_weight,
+                "densenet.0.bias": source_bias,
+                "densenet.class_layers.out.weight": torch.ones((2, 4)),
+            }
+        },
+        checkpoint_path,
+    )
+
+    summary = _load_shape_compatible_pretrain(
+        model=model,
+        checkpoint_path=checkpoint_path,
+        torch=torch,
+        device="cpu",
+    )
+
+    assert summary["loaded_tensor_count"] == 2
+    assert "0.weight" in summary["loaded_target_keys"]
+    assert torch.allclose(model[0].weight, source_weight)
+    assert torch.allclose(model[0].bias, source_bias)
 
 
 def test_resolve_monitor_value_supports_user_friendly_aliases() -> None:

@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--loss", choices=["cross_entropy", "ce", "nll_loss", "nll", "focal_loss", "focal"], default=None)
     parser.add_argument("--class-weights", nargs=2, type=float, default=None)
     parser.add_argument("--focal-gamma", type=float, default=None)
+    parser.add_argument("--temporal-lambda", type=float, default=None)
 
     parser.add_argument("--early-stopping", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--early-stopping-patience", type=int, default=None)
@@ -74,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--monitor-mode", choices=["min", "max"], default=None)
 
     parser.add_argument("--resume-from", type=Path, default=None)
+    parser.add_argument("--init-from-checkpoint", type=Path, default=None)
     parser.add_argument("--save-best", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--save-last", action=argparse.BooleanOptionalAction, default=None)
     return parser
@@ -122,6 +124,7 @@ def apply_cli_overrides(cfg: ResearchOASISTrainingConfig, args: argparse.Namespa
         name=str(_coalesce(cfg.loss.name, args.loss)),
         class_weights=tuple(args.class_weights) if args.class_weights is not None else cfg.loss.class_weights,
         focal_gamma=float(_coalesce(cfg.loss.focal_gamma, args.focal_gamma)),
+        temporal_lambda=float(_coalesce(cfg.loss.temporal_lambda, args.temporal_lambda)),
     )
     early_stopping = EarlyStoppingConfig(
         enabled=bool(_coalesce(cfg.early_stopping.enabled, args.early_stopping)),
@@ -132,6 +135,11 @@ def apply_cli_overrides(cfg: ResearchOASISTrainingConfig, args: argparse.Namespa
     )
     checkpoint = CheckpointConfig(
         resume_from=args.resume_from if args.resume_from is not None else cfg.checkpoint.resume_from,
+        init_from_checkpoint=(
+            args.init_from_checkpoint
+            if args.init_from_checkpoint is not None
+            else cfg.checkpoint.init_from_checkpoint
+        ),
         save_best=bool(_coalesce(cfg.checkpoint.save_best, args.save_best)),
         save_last=bool(_coalesce(cfg.checkpoint.save_last, args.save_last)),
     )

@@ -34,6 +34,7 @@ from .oasis_research import (
     _initial_best_value,
     _is_improvement,
     _load_resume_checkpoint,
+    _load_shape_compatible_pretrain,
     _resolve_device,
     _resolve_monitor_value,
     _run_epoch,
@@ -43,6 +44,7 @@ from .oasis_research import (
     _write_epoch_metrics,
 )
 from .trainer_utils import build_classification_loss, build_optimizer, build_scheduler
+from .trainer_utils import MonotonicityLoss
 
 _load_torch_symbols = load_torch_symbols
 
@@ -107,6 +109,9 @@ def _save_resolved_oasis2_config(
     payload["training"]["model_config_path"] = str(cfg.model_config_path) if cfg.model_config_path else None
     payload["training"]["checkpoint"]["resume_from"] = (
         str(cfg.checkpoint.resume_from) if cfg.checkpoint.resume_from else None
+    )
+    payload["training"]["checkpoint"]["init_from_checkpoint"] = (
+        str(cfg.checkpoint.init_from_checkpoint) if cfg.checkpoint.init_from_checkpoint else None
     )
     paths.resolved_config_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -271,6 +276,20 @@ def run_research_oasis2_training(
     amp_enabled = bool(cfg.mixed_precision and device.startswith("cuda"))
     print(f"oasis2_trainer: building model on {device}", flush=True)
     model = build_model(model_cfg).to(device)
+    if cfg.checkpoint.init_from_checkpoint is not None and cfg.checkpoint.resume_from is None:
+        pretrain_summary = _load_shape_compatible_pretrain(
+            model=model,
+            checkpoint_path=cfg.checkpoint.init_from_checkpoint,
+            torch=torch,
+            device=device,
+        )
+        print(
+            "oasis2_trainer: initialized model from checkpoint "
+            f"{cfg.checkpoint.init_from_checkpoint} "
+            f"loaded_tensors={pretrain_summary['loaded_tensor_count']} "
+            f"skipped_tensors={pretrain_summary['skipped_tensor_count']}",
+            flush=True,
+        )
     print("oasis2_trainer: building optimizer/scheduler/loss", flush=True)
     optimizer = build_optimizer(
         model,
@@ -294,6 +313,7 @@ def run_research_oasis2_training(
         focal_gamma=cfg.loss.focal_gamma,
     )
     scaler = _build_grad_scaler(torch, amp_enabled=amp_enabled)
+    monotonicity_loss_fn = MonotonicityLoss()
     print("oasis2_trainer: building dataloaders", flush=True)
     loader_cfg, dataloaders = _build_loaders(cfg)
     print(
@@ -355,6 +375,8 @@ def run_research_oasis2_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_train_batches,
             gradient_accumulation_steps=cfg.data.gradient_accumulation_steps,
+            temporal_lambda=cfg.loss.temporal_lambda,
+            monotonicity_loss_fn=monotonicity_loss_fn,
         )
         val_metrics = _run_epoch(
             loader=dataloaders.val_loader,
@@ -367,6 +389,8 @@ def run_research_oasis2_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_val_batches,
             gradient_accumulation_steps=1,
+            temporal_lambda=cfg.loss.temporal_lambda,
+            monotonicity_loss_fn=monotonicity_loss_fn,
         )
         final_val_metrics = val_metrics
         learning_rate = float(optimizer.param_groups[0]["lr"])

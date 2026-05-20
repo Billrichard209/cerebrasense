@@ -260,6 +260,32 @@ def test_oasis2_colab_pipeline_can_autofill_runtime_metadata_from_official_demog
     assert runtime_template.loc[0, "diagnosis_label_name"] == "nondemented"
 
 
+def test_oasis2_colab_parser_exposes_stability_training_flags() -> None:
+    """The Colab runner should inherit the local OASIS-2 stability knobs."""
+
+    module = _load_oasis2_colab_module()
+    args = module.build_parser().parse_args(
+        [
+            "--bundle-root",
+            "/content/drive/MyDrive/Cerebrasensecloud/OASIS-2",
+            "--class-weights",
+            "1.0",
+            "1.0",
+            "--focal-gamma",
+            "1.0",
+            "--temporal-lambda",
+            "0.1",
+            "--init-from-checkpoint",
+            "/content/oasis1_best.pt",
+        ]
+    )
+
+    assert args.class_weights == [1.0, 1.0]
+    assert args.focal_gamma == 1.0
+    assert args.temporal_lambda == 0.1
+    assert args.init_from_checkpoint == Path("/content/oasis1_best.pt")
+
+
 def test_resolve_bundle_root_accepts_parent_directory_upload_layout(tmp_path: Path) -> None:
     """The runner should recover when bundle contents were uploaded directly into the Drive parent."""
 
