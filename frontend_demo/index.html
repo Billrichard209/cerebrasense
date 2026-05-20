@@ -3,95 +3,343 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CerebraSense | MRI Decision Support Demo</title>
+    <meta name="description" content="CerebraSense — AI-Powered MRI Decision Support Platform for Alzheimer's Disease Detection and Longitudinal Monitoring" />
+    <title>CerebraSense | MRI Decision Support Platform</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b82f6'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='sans-serif' font-weight='800' font-size='16' fill='white'%3ECS%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+
+    <!-- Hidden SVG gradient definitions for gauge rings -->
+    <svg class="svg-defs" aria-hidden="true">
+      <defs>
+        <linearGradient id="gaugeGradBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#3b82f6" />
+          <stop offset="100%" stop-color="#60a5fa" />
+        </linearGradient>
+        <linearGradient id="gaugeGradEmerald" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#10b981" />
+          <stop offset="100%" stop-color="#34d399" />
+        </linearGradient>
+        <linearGradient id="gaugeGradAmber" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#f59e0b" />
+          <stop offset="100%" stop-color="#fbbf24" />
+        </linearGradient>
+        <linearGradient id="gaugeGradCoral" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ef4444" />
+          <stop offset="100%" stop-color="#fb7185" />
+        </linearGradient>
+      </defs>
+    </svg>
+
     <div class="app-shell">
-      <aside class="sidebar glass">
-        <div class="brand">
-          <div class="brand-mark">CS</div>
-          <div>
-            <h1>CerebraSense</h1>
-            <p>Decision Support Demo</p>
+
+      <!-- ══ Sidebar ══════════════════════════════════════ -->
+      <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-header">
+          <div class="brand">
+            <div class="brand-mark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2C8 2 5 5.6 5 10c0 2.4.8 4 2 5v3a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-3c1.2-1 2-2.6 2-5 0-4.4-3-8-7-8z"/>
+                <path d="M9 22v-4M15 22v-4M12 2v6M9 10h6"/>
+              </svg>
+            </div>
+            <div>
+              <h1>CerebraSense</h1>
+              <p>Decision Support Platform</p>
+            </div>
           </div>
         </div>
 
         <nav>
-          <button class="nav-item active">Overview</button>
-          <button class="nav-item">Scan Explorer</button>
-          <button class="nav-item">Longitudinal Trend</button>
-          <button class="nav-item">Explainability</button>
-          <button class="nav-item">Reports</button>
+          <button class="nav-item active" data-page="overview" aria-label="Overview dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" data-page="scan-explorer" aria-label="Scan Explorer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><path d="M12 3a15 15 0 0 1 4 9 15 15 0 0 1-4 9"/><path d="M12 3a15 15 0 0 0-4 9 15 15 0 0 0 4 9"/></svg>
+            <span>Scan Explorer</span>
+          </button>
+          <button class="nav-item" data-page="longitudinal" aria-label="Longitudinal Trend">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Longitudinal Trend</span>
+          </button>
+          <button class="nav-item" data-page="explainability" aria-label="Explainability">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Explainability</span>
+          </button>
+          <button class="nav-item" data-page="reports" aria-label="Reports">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span>Reports</span>
+          </button>
         </nav>
 
-        <div class="notice">
-          <h2>Important</h2>
-          <p>
-            This demo supports research-oriented decision assistance and should
-            not be used as a standalone medical diagnosis tool.
-          </p>
+        <div class="sidebar-footer">
+          <div class="notice">
+            <h2>⚠ Disclaimer</h2>
+            <p>This platform provides research-oriented decision assistance and must not be used as a standalone medical diagnosis tool.</p>
+          </div>
+          <div class="version-tag">v2.0 · Research Use Only</div>
         </div>
       </aside>
 
-      <main class="content">
+
+      <!-- ══ Main Content ═════════════════════════════════ -->
+      <main class="content" role="main">
+
+        <!-- Top Bar -->
         <header class="topbar glass">
-          <div>
-            <p class="eyebrow">Live prototype</p>
-            <h2>Structural MRI Review Workspace</h2>
+          <div class="topbar-left">
+            <button class="menu-btn" id="menuBtn" aria-label="Toggle navigation">☰</button>
+            <div>
+              <span class="status-badge"><span class="pulse-dot"></span> Simulated</span>
+              <h2 id="pageTitle">Structural MRI Review Workspace</h2>
+            </div>
           </div>
-          <button id="refreshBtn" class="primary-btn">Refresh Simulation</button>
+          <div class="topbar-right">
+            <div class="patient-selector" id="patientSelector" tabindex="0" role="button" aria-label="Select patient">
+              <span>Patient: OAS2_0001</span>
+              <svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>
+            </div>
+            <button id="analyzeBtn" class="primary-btn" aria-label="Run new analysis">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run New Analysis
+            </button>
+          </div>
         </header>
 
-        <section class="kpi-grid">
-          <article class="kpi glass">
-            <p>Risk Signal</p>
-            <h3 id="riskValue">0.74</h3>
-            <span class="trend up">+0.04 vs previous</span>
-          </article>
-          <article class="kpi glass">
-            <p>Hippocampal Volume</p>
-            <h3 id="hippoValue">5.8 cm&sup3;</h3>
-            <span class="trend down">-2.1% yearly trend</span>
-          </article>
-          <article class="kpi glass">
-            <p>Data Completeness</p>
-            <h3 id="dataValue">96%</h3>
-            <span class="trend up">All critical fields present</span>
-          </article>
-          <article class="kpi glass">
-            <p>Model Confidence</p>
-            <h3 id="confValue">88%</h3>
-            <span class="trend up">Stable over last 3 scans</span>
-          </article>
-        </section>
 
-        <section class="panel-grid">
-          <article class="panel glass">
-            <div class="panel-header">
-              <h3>Longitudinal Risk Trend</h3>
-              <p>Last 6 visits</p>
-            </div>
-            <canvas id="trendChart" width="700" height="220" aria-label="Risk trend chart"></canvas>
-          </article>
+        <!-- ── PAGE: Overview ──────────────────────────── -->
+        <div class="page-view active" id="page-overview">
+          <section class="kpi-grid" aria-label="Key performance indicators">
+            <article class="kpi glass" data-gauge-pct="74" data-gauge-color="coral">
+              <svg class="gauge-ring" viewBox="0 0 56 56">
+                <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+                <circle class="gauge-fill coral" cx="28" cy="28" r="24" data-gauge="risk"/>
+              </svg>
+              <div class="kpi-info">
+                <span class="kpi-label">Risk Signal</span>
+                <span class="kpi-value" id="riskValue" data-target="0.74">0.00</span>
+                <span class="trend up"><svg viewBox="0 0 10 10"><path d="M5 2l4 6H1z" fill="currentColor"/></svg> +0.04 vs previous</span>
+              </div>
+            </article>
+            <article class="kpi glass" data-gauge-pct="72" data-gauge-color="amber">
+              <svg class="gauge-ring" viewBox="0 0 56 56">
+                <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+                <circle class="gauge-fill amber" cx="28" cy="28" r="24" data-gauge="hippo"/>
+              </svg>
+              <div class="kpi-info">
+                <span class="kpi-label">Hippocampal Vol.</span>
+                <span class="kpi-value" id="hippoValue" data-target="5.8">0.0</span>
+                <span class="trend down"><svg viewBox="0 0 10 10"><path d="M5 8l4-6H1z" fill="currentColor"/></svg> −2.1% yearly</span>
+              </div>
+            </article>
+            <article class="kpi glass" data-gauge-pct="96" data-gauge-color="emerald">
+              <svg class="gauge-ring" viewBox="0 0 56 56">
+                <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+                <circle class="gauge-fill emerald" cx="28" cy="28" r="24" data-gauge="data"/>
+              </svg>
+              <div class="kpi-info">
+                <span class="kpi-label">Data Completeness</span>
+                <span class="kpi-value" id="dataValue" data-target="96">0</span>
+                <span class="trend up"><svg viewBox="0 0 10 10"><path d="M5 2l4 6H1z" fill="currentColor"/></svg> All fields present</span>
+              </div>
+            </article>
+            <article class="kpi glass" data-gauge-pct="88" data-gauge-color="blue">
+              <svg class="gauge-ring" viewBox="0 0 56 56">
+                <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+                <circle class="gauge-fill blue" cx="28" cy="28" r="24" data-gauge="conf"/>
+              </svg>
+              <div class="kpi-info">
+                <span class="kpi-label">Model Confidence</span>
+                <span class="kpi-value" id="confValue" data-target="88">0</span>
+                <span class="trend up"><svg viewBox="0 0 10 10"><path d="M5 2l4 6H1z" fill="currentColor"/></svg> Stable over 3 scans</span>
+              </div>
+            </article>
+          </section>
 
-          <article class="panel glass explainability">
-            <div class="panel-header">
-              <h3>Explainability Highlights</h3>
-              <p>Feature contribution snapshot</p>
+          <section class="panel-grid">
+            <article class="panel glass">
+              <div class="panel-header">
+                <h3>Longitudinal Risk Trend</h3>
+                <p>Last 6 visits · Probability of cognitive decline</p>
+              </div>
+              <div class="chart-container">
+                <canvas id="trendChart" aria-label="Risk trend chart over 6 visits"></canvas>
+                <div class="chart-tooltip" id="chartTooltip">
+                  <div class="tt-label"></div>
+                  <div class="tt-value"></div>
+                  <div class="tt-delta"></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel glass explainability">
+              <div class="panel-header">
+                <h3>Explainability Highlights</h3>
+                <p>Top feature contributions</p>
+              </div>
+              <ul id="featureList" aria-label="Feature importance breakdown"></ul>
+            </article>
+          </section>
+        </div>
+
+
+        <!-- ── PAGE: Scan Explorer ─────────────────────── -->
+        <div class="page-view" id="page-scan-explorer">
+          <div class="scan-viewer-grid">
+            <div class="scan-plane glass">
+              <div class="scan-plane-label"><span class="plane-dot axial"></span> Axial Plane</div>
+              <div class="scan-canvas-wrap">
+                <canvas id="scanAxial" width="256" height="256"></canvas>
+                <div class="scan-crosshair"></div>
+              </div>
+              <div class="slice-controls">
+                <input type="range" class="slice-slider" id="sliderAxial" min="0" max="95" value="48" aria-label="Axial slice" />
+                <span class="slice-label" id="labelAxial">Slice 48</span>
+              </div>
             </div>
-            <ul id="featureList"></ul>
-          </article>
-        </section>
+            <div class="scan-plane glass">
+              <div class="scan-plane-label"><span class="plane-dot coronal"></span> Coronal Plane</div>
+              <div class="scan-canvas-wrap">
+                <canvas id="scanCoronal" width="256" height="256"></canvas>
+                <div class="scan-crosshair"></div>
+              </div>
+              <div class="slice-controls">
+                <input type="range" class="slice-slider" id="sliderCoronal" min="0" max="95" value="48" aria-label="Coronal slice" />
+                <span class="slice-label" id="labelCoronal">Slice 48</span>
+              </div>
+            </div>
+            <div class="scan-plane glass">
+              <div class="scan-plane-label"><span class="plane-dot sagittal"></span> Sagittal Plane</div>
+              <div class="scan-canvas-wrap">
+                <canvas id="scanSagittal" width="256" height="256"></canvas>
+                <div class="scan-crosshair"></div>
+              </div>
+              <div class="slice-controls">
+                <input type="range" class="slice-slider" id="sliderSagittal" min="0" max="95" value="48" aria-label="Sagittal slice" />
+                <span class="slice-label" id="labelSagittal">Slice 48</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scan-metadata">
+            <div class="meta-card glass"><div class="meta-label">Scanner</div><div class="meta-value">Siemens 3T Magnetom</div></div>
+            <div class="meta-card glass"><div class="meta-label">Acquisition Date</div><div class="meta-value">2024-03-15</div></div>
+            <div class="meta-card glass"><div class="meta-label">Voxel Size</div><div class="meta-value">1.0 × 1.0 × 1.0 mm³</div></div>
+            <div class="meta-card glass"><div class="meta-label">Sequence</div><div class="meta-value">T1w MPRAGE</div></div>
+            <div class="meta-card glass"><div class="meta-label">Matrix Size</div><div class="meta-value">256 × 256 × 96</div></div>
+            <div class="meta-card glass"><div class="meta-label">Patient Age</div><div class="meta-value">72 years</div></div>
+          </div>
+        </div>
+
+
+        <!-- ── PAGE: Longitudinal Trend ────────────────── -->
+        <div class="page-view" id="page-longitudinal">
+          <div class="panel glass" style="padding: var(--sp-5);">
+            <div class="panel-header">
+              <h3>Multi-Metric Longitudinal Analysis</h3>
+              <p>Track changes across visits to detect disease progression</p>
+            </div>
+            <div class="longitudinal-controls">
+              <button class="metric-toggle active" data-metric="risk"><span class="toggle-dot" style="background:#3b82f6"></span> Risk Score</button>
+              <button class="metric-toggle active" data-metric="hippo"><span class="toggle-dot" style="background:#10b981"></span> Hippocampal Vol.</button>
+              <button class="metric-toggle" data-metric="mmse"><span class="toggle-dot" style="background:#f59e0b"></span> MMSE Score</button>
+              <div class="range-selector">
+                <button class="range-btn" data-range="3">3 Visits</button>
+                <button class="range-btn active" data-range="6">6 Visits</button>
+                <button class="range-btn" data-range="12">12 Visits</button>
+              </div>
+            </div>
+            <div class="long-chart-wrap">
+              <canvas id="longChart" aria-label="Multi-metric longitudinal chart"></canvas>
+            </div>
+          </div>
+
+          <div class="panel glass" style="padding: var(--sp-5);">
+            <div class="panel-header">
+              <h3>Visit Metrics Table</h3>
+              <p>Raw values per visit</p>
+            </div>
+            <div class="metrics-table-wrap">
+              <table class="metrics-table" id="metricsTable">
+                <thead>
+                  <tr><th>Visit</th><th>Date</th><th>Risk Score</th><th>Hippo. Vol.</th><th>MMSE</th><th>Δ Risk</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- ── PAGE: Explainability ────────────────────── -->
+        <div class="page-view" id="page-explainability">
+          <div class="panel glass" style="padding: var(--sp-5);">
+            <div class="panel-header">
+              <h3>Feature Importance Analysis</h3>
+              <p>Model attribution for current prediction</p>
+            </div>
+            <ul id="explainFullList" aria-label="Full feature importance list"></ul>
+          </div>
+
+          <div class="explain-grid">
+            <div class="explain-detail-card glass">
+              <h4>Regional Atrophy Assessment</h4>
+              <div class="region-list" id="regionList"></div>
+            </div>
+            <div class="explain-detail-card glass">
+              <h4>Model Performance Metrics</h4>
+              <div class="perf-metrics" id="perfMetrics"></div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- ── PAGE: Reports ───────────────────────────── -->
+        <div class="page-view" id="page-reports">
+          <div class="report-card glass">
+            <div class="report-header">
+              <div>
+                <h3>Clinical Decision Support Report</h3>
+                <p class="report-date" id="reportDate"></p>
+              </div>
+              <button class="export-btn" id="exportBtn" aria-label="Export report">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export PDF
+              </button>
+            </div>
+
+            <div class="report-section">
+              <h4>Key Findings</h4>
+              <div class="findings-list" id="findingsList"></div>
+            </div>
+
+            <div class="report-section">
+              <h4>Clinical Recommendation</h4>
+              <div class="recommendation-box" id="recommendationBox">
+                <p></p>
+              </div>
+            </div>
+
+            <div class="report-section">
+              <h4>Summary Metrics</h4>
+              <div class="kpi-grid" id="reportMetrics" style="grid-template-columns: repeat(3, 1fr);"></div>
+            </div>
+
+            <div class="disclaimer">
+              ⚠ This report is generated by an AI-assisted decision support system for research purposes only. All findings must be reviewed and validated by a qualified medical professional before any clinical action is taken. CerebraSense is not a medical device.
+            </div>
+          </div>
+        </div>
+
       </main>
     </div>
 
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <script src="./app.js"></script>
   </body>
 </html>
