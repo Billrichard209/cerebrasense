@@ -11,6 +11,8 @@ from src.data.registry import build_dataset_registry_snapshot
 from src.explainability.gradcam import ExplainScanConfig, explain_scan
 from src.inference.serving import load_backend_serving_config
 from src.inference.pipeline import PredictScanOptions, predict_scan
+from src.inference.dashboard_utils import load_dashboard_data
+from src.inference.scribe import ClinicalScribe
 from src.longitudinal.service import (
     apply_temporal_smoothing,
     build_and_save_longitudinal_report,
@@ -766,10 +768,84 @@ def build_saved_longitudinal_report_payload(request: LongitudinalReportRequest) 
     return payload
 
 
+def build_dashboard_payload() -> dict[str, object]:
+    """Return registry-driven dashboard payload for API clients."""
+
+    settings = get_app_settings()
+    data, error = load_dashboard_data(settings.project_root)
+    if error:
+        return {"error": error, "subjects": [], "summary": {}}
+    return data or {"subjects": [], "summary": {}}
+
+
+def build_oasis2_longitudinal_dashboard_payload(*, run_name: str | None = None) -> dict[str, object]:
+    """Return longitudinal dashboard data plus subject-consensus metrics when available."""
+
+    settings = get_app_settings()
+    payload = build_dashboard_payload()
+    resolved_run = run_name
+    if resolved_run is None:
+        registry_path = settings.outputs_root / "model_registry" / "oasis2_current_baseline.json"
+        if registry_path.exists():
+            resolved_run = json.loads(registry_path.read_text(encoding="utf-8")).get("run_name")
+    consensus: dict[str, object] = {}
+    if resolved_run:
+        metrics_path = (
+            settings.outputs_root
+            / "runs"
+            / "oasis2"
+            / str(resolved_run)
+            / "evaluation"
+            / "post_train_test_best_model_threshold_balanced_accuracy"
+            / "metrics.json"
+        )
+        if metrics_path.exists():
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            consensus = dict(metrics.get("subject_consensus", {}))
+    payload["subject_consensus"] = consensus
+    payload["active_run_name"] = resolved_run
+    return payload
+
+
+def _enrich_prediction_payload(payload: dict[str, object], *, request: ScanPredictionRequest) -> dict[str, object]:
+    """Attach clinical narrative and optional Grad-CAM when review is required."""
+
+    review_required = bool(payload.get("review_flag"))
+    payload["review_required"] = review_required
+    clinical_meta = {
+        "age": request.subject_id,
+        "mmse": payload.get("input_metadata", {}).get("mmse"),
+    }
+    payload["clinical_narrative"] = ClinicalScribe.generate_summary(
+        patient_id=request.subject_id or "upload",
+        risk_score=float(payload.get("probability_score", 0.0)),
+        label=str(payload.get("label_name", "unknown")),
+        velocity=0.0,
+        biomarkers={},
+        clinical_meta=clinical_meta,
+    )
+    if review_required and request.save_debug_slices:
+        try:
+            explanation = explain_scan(
+                ExplainScanConfig(
+                    scan_path=Path(request.scan_path),
+                    checkpoint_path=Path(request.checkpoint_path),
+                    output_name=f"{request.output_name}_review_expl",
+                    device=request.device,
+                    save_saliency=True,
+                ),
+                settings=get_app_settings(),
+            )
+            payload["explainability"] = explanation.payload
+        except Exception as error:  # noqa: BLE001
+            payload["explainability_error"] = str(error)
+    return payload
+
+
 def build_scan_prediction_payload(request: ScanPredictionRequest) -> dict[str, object]:
     """Run the reusable scan inference pipeline for an API request."""
 
-    return predict_scan(
+    payload = predict_scan(
         request.scan_path,
         request.checkpoint_path,
         request.config_path,
@@ -785,6 +861,7 @@ def build_scan_prediction_payload(request: ScanPredictionRequest) -> dict[str, o
         ),
         settings=get_app_settings(),
     )
+    return _enrich_prediction_payload(payload, request=request)
 
 
 def _safe_upload_name(file_name: str) -> str:
@@ -861,7 +938,33 @@ def build_scan_prediction_upload_payload(
         scan_timestamp=scan_timestamp,
     )
     payload = build_scan_prediction_payload(request)
+    if bool(payload.get("review_flag")) and not save_debug_slices:
+        payload = _enrich_prediction_payload(
+            payload,
+            request=ScanPredictionRequest(
+                scan_path=request.scan_path,
+                checkpoint_path=request.checkpoint_path,
+                config_path=request.config_path,
+                model_config_path=request.model_config_path,
+                output_name=request.output_name,
+                threshold=request.threshold,
+                device=request.device,
+                save_debug_slices=True,
+                subject_id=request.subject_id,
+                session_id=request.session_id,
+                scan_timestamp=request.scan_timestamp,
+            ),
+        )
     payload.setdefault("input_metadata", {})["upload_mode"] = "raw_binary_octet_stream"
+    if bool(payload.get("review_flag")):
+        audit_sensitive_action(
+            action="api_upload_review_required",
+            details={
+                "output_name": output_name,
+                "probability_score": payload.get("probability_score"),
+                "label_name": payload.get("label_name"),
+            },
+        )
     return payload
 
 

@@ -49,6 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--val-fraction", type=float, default=None)
     parser.add_argument("--test-fraction", type=float, default=None)
     parser.add_argument("--weighted-sampling", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument(
+        "--training-cohort",
+        choices=["full", "stable_only", "visit_filter"],
+        default=None,
+        help="Train-cohort filter: full, stable_only, or visit_filter.",
+    )
     parser.add_argument("--max-train-batches", type=int, default=None)
     parser.add_argument("--max-val-batches", type=int, default=None)
 
@@ -67,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--class-weights", nargs=2, type=float, default=None)
     parser.add_argument("--focal-gamma", type=float, default=None)
     parser.add_argument("--temporal-lambda", type=float, default=None)
+    parser.add_argument("--temporal-lambda-warmup-epochs", type=int, default=None)
 
     parser.add_argument("--early-stopping", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--early-stopping-patience", type=int, default=None)
@@ -104,6 +111,7 @@ def apply_cli_overrides(cfg: ResearchOASISTrainingConfig, args: argparse.Namespa
         val_fraction=float(_coalesce(cfg.data.val_fraction, args.val_fraction)),
         test_fraction=float(_coalesce(cfg.data.test_fraction, args.test_fraction)),
         weighted_sampling=bool(_coalesce(cfg.data.weighted_sampling, args.weighted_sampling)),
+        training_cohort=str(_coalesce(cfg.data.training_cohort, args.training_cohort)),
         max_train_batches=args.max_train_batches if args.max_train_batches is not None else cfg.data.max_train_batches,
         max_val_batches=args.max_val_batches if args.max_val_batches is not None else cfg.data.max_val_batches,
     )
@@ -125,6 +133,9 @@ def apply_cli_overrides(cfg: ResearchOASISTrainingConfig, args: argparse.Namespa
         class_weights=tuple(args.class_weights) if args.class_weights is not None else cfg.loss.class_weights,
         focal_gamma=float(_coalesce(cfg.loss.focal_gamma, args.focal_gamma)),
         temporal_lambda=float(_coalesce(cfg.loss.temporal_lambda, args.temporal_lambda)),
+        temporal_lambda_warmup_epochs=int(
+            _coalesce(cfg.loss.temporal_lambda_warmup_epochs, args.temporal_lambda_warmup_epochs)
+        ),
     )
     early_stopping = EarlyStoppingConfig(
         enabled=bool(_coalesce(cfg.early_stopping.enabled, args.early_stopping)),

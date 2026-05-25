@@ -44,6 +44,7 @@ class ResearchDataConfig:
     val_fraction: float = 0.15
     test_fraction: float = 0.15
     weighted_sampling: bool = False
+    training_cohort: str = "full"
     max_train_batches: int | None = None
     max_val_batches: int | None = None
 
@@ -77,6 +78,7 @@ class LossConfig:
     class_weights: tuple[float, ...] | None = None
     focal_gamma: float = 2.0
     temporal_lambda: float = 0.0
+    temporal_lambda_warmup_epochs: int = 0
 
 
 @dataclass(slots=True, frozen=True)
@@ -187,6 +189,32 @@ def _optional_path(raw_value: Any) -> Path | None:
     if raw_value in {None, ""}:
         return None
     return Path(raw_value)
+
+
+def _effective_temporal_lambda(loss_cfg: LossConfig, epoch: int) -> float:
+    """Return monotonicity loss weight; zero during warmup epochs."""
+
+    warmup_epochs = max(int(loss_cfg.temporal_lambda_warmup_epochs), 0)
+    if epoch <= warmup_epochs:
+        return 0.0
+    return float(loss_cfg.temporal_lambda)
+
+
+def resolve_loss_class_weights(
+    configured_weights: tuple[float, ...] | None,
+    *,
+    label_counts: dict[int, int],
+) -> tuple[float, float] | None:
+    """Build balanced CE/focal class weights when YAML leaves them unset."""
+
+    if configured_weights is not None and configured_weights != (1.0, 1.0):
+        return configured_weights
+    count_0 = int(label_counts.get(0, 0))
+    count_1 = int(label_counts.get(1, 0))
+    if count_0 <= 0 or count_1 <= 0:
+        return configured_weights
+    total = count_0 + count_1
+    return (total / (2.0 * count_0), total / (2.0 * count_1))
 
 
 def _merge_training_config(default_config: ResearchOASISTrainingConfig, overrides: dict[str, Any]) -> ResearchOASISTrainingConfig:

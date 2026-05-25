@@ -57,6 +57,7 @@ class OASIS2LoaderConfig:
     cache_rate: float = 0.0
     weighted_sampling: bool = False
     weighted_sampling_replacement: bool = True
+    training_cohort: str = "full"
     transform_config: OASISTransformConfig = field(default_factory=load_oasis_transform_config)
 
 
@@ -217,6 +218,40 @@ def _build_torch_generator(seed: int) -> object:
     return generator
 
 
+def filter_oasis2_train_records(
+    records: list[dict[str, Any]],
+    *,
+    training_cohort: str,
+) -> list[dict[str, Any]]:
+    """Apply optional training-cohort filters without changing val/test splits."""
+
+    normalized = training_cohort.strip().lower()
+    if normalized in {"", "full"}:
+        return records
+    if normalized == "stable_only":
+        return [record for record in records if not bool(record.get("mixed_label_group"))]
+    if normalized == "visit_filter":
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            subject_id = str(record.get("subject_id") or "")
+            grouped.setdefault(subject_id, []).append(record)
+        filtered: list[dict[str, Any]] = []
+        for subject_records in grouped.values():
+            if not any(bool(record.get("mixed_label_group")) for record in subject_records):
+                filtered.extend(subject_records)
+                continue
+            max_visit = max(int(record.get("visit_number") or -1) for record in subject_records)
+            for record in subject_records:
+                visit_number = int(record.get("visit_number") or -1)
+                if int(record["label"]) == 1 or visit_number == max_visit:
+                    filtered.append(record)
+        return filtered
+    raise ValueError(
+        f"Unsupported OASIS-2 training_cohort {training_cohort!r}. "
+        "Expected one of: full, stable_only, visit_filter."
+    )
+
+
 def build_oasis2_datasets(cfg: OASIS2LoaderConfig) -> OASIS2DatasetBundle:
     """Build reproducible OASIS-2 train/val/test MONAI datasets from supervised split manifests."""
 
@@ -239,6 +274,12 @@ def build_oasis2_datasets(cfg: OASIS2LoaderConfig) -> OASIS2DatasetBundle:
     train_records = _records_from_split_frame(split_artifacts.train_frame, search_roots=search_roots)
     val_records = _records_from_split_frame(split_artifacts.val_frame, search_roots=search_roots)
     test_records = _records_from_split_frame(split_artifacts.test_frame, search_roots=search_roots)
+    train_records = filter_oasis2_train_records(train_records, training_cohort=cfg.training_cohort)
+    if not train_records:
+        raise ValueError(
+            f"OASIS-2 training cohort {cfg.training_cohort!r} removed all train records. "
+            "Choose a less restrictive cohort or rebuild splits."
+        )
     train_class_weights = _compute_class_weights(train_records)
 
     # Strip variable metadata for MONAI datasets — the training loop only uses

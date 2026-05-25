@@ -14,6 +14,9 @@ alz_backend/storage/*.sqlite3
 alz_backend/storage/*.db
 alz_backend/storage/*.log
 
+# Duplicate legacy tree (use archive (1)/alz_backend only)
+Cerebrasense-/
+
 # Local raw datasets kept out of GitHub
 OriginalDataset/
 AugmentedAlzheimerDataset/

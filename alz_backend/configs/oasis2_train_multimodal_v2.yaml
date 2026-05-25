@@ -1,0 +1,62 @@
+# Multimodal OASIS-2 recipe (run after oasis2_mri_baseline_v2 wins on test AUROC).
+
+run_name: oasis2_multimodal_v2
+epochs: 40
+device: auto
+mixed_precision: true
+deterministic: true
+dry_run: false
+
+model:
+  architecture: densenet121_multimodal
+
+model_config_path:
+
+data:
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  num_workers: 2
+  cache_rate: 0.8
+  image_size: [128, 128, 128]
+  seed: 42
+  split_seed: 42
+  train_fraction: 0.7
+  val_fraction: 0.15
+  test_fraction: 0.15
+  weighted_sampling: true
+  training_cohort: full
+  max_train_batches:
+  max_val_batches:
+
+optimizer:
+  name: adamw
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  momentum: 0.9
+
+scheduler:
+  name: cosine
+  step_size: 30
+  gamma: 0.5
+  patience: 5
+  factor: 0.5
+
+loss:
+  name: focal_loss
+  class_weights:
+  focal_gamma: 2.0
+  temporal_lambda: 0.05
+  temporal_lambda_warmup_epochs: 10
+
+early_stopping:
+  enabled: true
+  patience: 12
+  min_delta: 0.001
+  monitor: val_auroc
+  mode: max
+
+checkpoint:
+  resume_from:
+  init_from_checkpoint: outputs/runs/oasis/oasis_baseline_rtx2050_gpu_seed42_split42/checkpoints/best_model.pt
+  save_best: true
+  save_last: true

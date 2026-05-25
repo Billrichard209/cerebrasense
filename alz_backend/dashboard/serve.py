@@ -4,8 +4,6 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-import pandas as pd
-import numpy as np
 import cgi
 
 # Add project root to sys.path
@@ -13,107 +11,39 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.inference.pipeline import predict_scan, PredictScanOptions, compute_longitudinal_metrics
+from src.inference.pipeline import predict_scan, PredictScanOptions
+from src.inference.dashboard_utils import load_dashboard_data, resolve_oasis2_prediction_csvs
 from src.configs.runtime import get_app_settings
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
 DASHBOARD_DIR = Path(__file__).parent
 
-def find_predictions_csv():
-    CANDIDATE_CSVS = [
-        ROOT / "outputs/runs/oasis2/oasis2_colab_improved_v1/evaluation/post_train_test_best_model/predictions.csv",
-        ROOT / "outputs/runs/oasis2/oasis2_bias_stability_v1/evaluation/post_train_val_best_model/predictions.csv",
-    ]
-    for p in CANDIDATE_CSVS:
-        if p.exists():
-            return p
-    return None
+
+def find_predictions_csv() -> Path | None:
+    resolved = resolve_oasis2_prediction_csvs(ROOT)
+    if not resolved:
+        return None
+    return next(iter(resolved.values()))
+
 
 def load_data():
-    # Define primary and secondary comparison runs
-    RUNS = {
-        "Consistent (V2)": ROOT / "outputs/runs/oasis2/oasis2_colab_improved_v1/evaluation/post_train_test_best_model/predictions.csv",
-        "Baseline (V1)": ROOT / "outputs/runs/oasis2/oasis2_bias_stability_v1/evaluation/post_train_test_best_model/predictions.csv",
-    }
+    return load_dashboard_data(ROOT)
 
-    run_data = {}
-    for name, path in RUNS.items():
-        if path.exists():
-            run_data[name] = pd.read_csv(path)
 
-    if not run_data:
-        return None, "No prediction CSVs found in outputs/"
-
-    # Use the primary run for the subject list
-    primary_name = "Consistent (V2)" if "Consistent (V2)" in run_data else list(run_data.keys())[0]
-    df_primary = run_data[primary_name]
-    
-    longitudinal = df_primary[df_primary["meta_subject_id"].str.startswith("OAS2_", na=False)].copy()
-    if longitudinal.empty:
-        longitudinal = df_primary.copy()
-
-    subjects = []
-    for subj_id, group in longitudinal.groupby("meta_subject_id"):
-        group = group.sort_values("meta_session_id").reset_index(drop=True)
-        raw_scores = group["probability_class_1"].tolist()
-        
-        # Use our new core longitudinal engine
-        trends = compute_longitudinal_metrics(raw_scores)
-        
-        # Try to get baseline scores for comparison
-        comparison_scores = []
-        if "Baseline (V1)" in run_data:
-            b_df = run_data["Baseline (V1)"]
-            b_subj = b_df[b_df["meta_subject_id"] == subj_id].sort_values("meta_session_id")
-            if not b_subj.empty:
-                comparison_scores = [round(s, 4) for s in b_subj["probability_class_1"].tolist()]
-
-        final_risk = trends["smoothed_scores"][-1]
-        
-        # Multimodal metadata extraction (best effort from CSV meta)
-        age = "70"
-        sex = "Female"
-        mmse = "27"
-        if "meta" in group.columns:
-            try:
-                m = json.loads(group["meta"].iloc[-1].replace("'", "\""))
-                om = m.get("oasis2_metadata", {})
-                age = str(om.get("age_at_visit", "70"))
-                sex = "Male" if str(om.get("sex")).lower() == "m" else "Female"
-                mmse = str(om.get("mmse", "27"))
-            except: pass
-
-        subjects.append({
-            "subject_id": subj_id,
-            "visits": group["meta_session_id"].tolist(),
-            "raw_scores": [round(s, 4) for s in raw_scores],
-            "smoothed_scores": trends["smoothed_scores"],
-            "comparison_scores": comparison_scores,
-            "velocity": trends["velocity"],
-            "trend_status": trends["trend_status"],
-            "is_rapid_decline": trends["is_rapid_decline"],
-            "final_risk": round(final_risk, 4),
-            "status": "High Risk" if final_risk >= 0.65 else "Low Risk",
-            "num_visits": len(raw_scores),
-            "clinical": {
-                "age": age,
-                "sex": sex,
-                "mmse": mmse
-            }
-        })
-
-    subjects.sort(key=lambda x: x["final_risk"], reverse=True)
-
-    return {
-        "subjects": subjects,
-        "summary": {
-            "total_subjects": len(subjects),
-            "high_risk_count": len([s for s in subjects if s["status"] == "High Risk"]),
-            "rapid_decline_count": len([s for s in subjects if s["is_rapid_decline"]]),
-            "runs_loaded": list(run_data.keys()),
-        }
-    }, None
+def _resolve_inference_checkpoint() -> Path:
+    settings = get_app_settings()
+    registry_path = settings.outputs_root / "model_registry" / "oasis2_current_baseline.json"
+    if registry_path.exists():
+        payload = json.loads(registry_path.read_text(encoding="utf-8"))
+        checkpoint = Path(str(payload.get("checkpoint_path") or ""))
+        if not checkpoint.is_absolute():
+            checkpoint = (settings.project_root / checkpoint).resolve()
+        if checkpoint.exists():
+            return checkpoint
+    onnx_path = ROOT / "best_model.onnx"
+    if onnx_path.exists():
+        return onnx_path
+    return ROOT / "outputs/runs/oasis2/oasis2_bias_stability_v1/checkpoints/best_model.pt"
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -196,10 +126,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 temp_path = temp_dir / file_item.filename
                 temp_path.write_bytes(file_item.file.read())
 
-                # Run Inference using ONNX (preferred)
-                onnx_path = ROOT / "best_model.onnx"
-                pt_path = ROOT / "outputs/runs/oasis2/oasis2_colab_improved_v1/checkpoints/best_model.pt"
-                checkpoint = onnx_path if onnx_path.exists() else pt_path
+                checkpoint = _resolve_inference_checkpoint()
 
                 if not checkpoint.exists():
                     self.send_json({"error": "No model found. Export ONNX first."}, 500)

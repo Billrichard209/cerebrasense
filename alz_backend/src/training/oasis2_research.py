@@ -30,6 +30,7 @@ from .oasis_research import (
     _build_grad_scaler,
     _checkpoint_payload,
     _coerce_labels,
+    _effective_temporal_lambda,
     _epoch_row,
     _initial_best_value,
     _is_improvement,
@@ -37,6 +38,7 @@ from .oasis_research import (
     _load_shape_compatible_pretrain,
     _resolve_device,
     _resolve_monitor_value,
+    _resolve_loss_class_weights,
     _run_epoch,
     _save_checkpoint,
     _step_scheduler,
@@ -49,9 +51,18 @@ from .trainer_utils import MonotonicityLoss
 _load_torch_symbols = load_torch_symbols
 
 
-def default_oasis2_train_config_path() -> Path:
-    """Return the default OASIS-2 training YAML path."""
+def default_oasis2_train_improved_config_path() -> Path:
+    """Return the improved OASIS-2 training YAML path."""
 
+    return resolve_project_root() / "configs" / "oasis2_train_improved.yaml"
+
+
+def default_oasis2_train_config_path() -> Path:
+    """Return the default OASIS-2 training YAML path (improved recipe)."""
+
+    improved = default_oasis2_train_improved_config_path()
+    if improved.exists():
+        return improved
     return resolve_project_root() / "configs" / "oasis2_train.yaml"
 
 
@@ -129,6 +140,7 @@ def _build_loaders(cfg: ResearchOASISTrainingConfig):
         num_workers=cfg.data.num_workers,
         cache_rate=cfg.data.cache_rate,
         weighted_sampling=cfg.data.weighted_sampling,
+        training_cohort=cfg.data.training_cohort,
         transform_config=load_oasis_transform_config_for_oasis2(cfg),
     )
     dataloaders = build_oasis2_dataloaders(loader_cfg)
@@ -306,16 +318,30 @@ def run_research_oasis2_training(
         patience=cfg.scheduler.patience,
         factor=cfg.scheduler.factor,
     )
-    loss_function = build_classification_loss(
-        cfg.loss.name,
-        class_weights=cfg.loss.class_weights,
-        device=device,
-        focal_gamma=cfg.loss.focal_gamma,
-    )
     scaler = _build_grad_scaler(torch, amp_enabled=amp_enabled)
     monotonicity_loss_fn = MonotonicityLoss()
     print("oasis2_trainer: building dataloaders", flush=True)
     loader_cfg, dataloaders = _build_loaders(cfg)
+    train_label_counts: dict[int, int] = {}
+    for record in dataloaders.dataset_bundle.train_records:
+        label = int(record["label"])
+        train_label_counts[label] = train_label_counts.get(label, 0) + 1
+    resolved_class_weights = resolve_loss_class_weights(
+        cfg.loss.class_weights,
+        label_counts=train_label_counts,
+    )
+    loss_function = build_classification_loss(
+        cfg.loss.name,
+        class_weights=resolved_class_weights,
+        device=device,
+        focal_gamma=cfg.loss.focal_gamma,
+    )
+    if resolved_class_weights is not None:
+        print(
+            f"oasis2_trainer: loss_class_weights={list(resolved_class_weights)} "
+            f"train_label_counts={train_label_counts}",
+            flush=True,
+        )
     print(
         "oasis2_trainer: dataloaders_ready "
         f"train={len(dataloaders.dataset_bundle.train_records)} "
@@ -364,6 +390,7 @@ def run_research_oasis2_training(
     )
 
     for epoch in range(start_epoch, cfg.epochs + 1):
+        epoch_temporal_lambda = _effective_temporal_lambda(cfg.loss, epoch)
         train_metrics = _run_epoch(
             loader=dataloaders.train_loader,
             model=model,
@@ -375,7 +402,7 @@ def run_research_oasis2_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_train_batches,
             gradient_accumulation_steps=cfg.data.gradient_accumulation_steps,
-            temporal_lambda=cfg.loss.temporal_lambda,
+            temporal_lambda=epoch_temporal_lambda,
             monotonicity_loss_fn=monotonicity_loss_fn,
         )
         val_metrics = _run_epoch(
@@ -389,7 +416,7 @@ def run_research_oasis2_training(
             amp_enabled=amp_enabled,
             max_batches=cfg.data.max_val_batches,
             gradient_accumulation_steps=1,
-            temporal_lambda=cfg.loss.temporal_lambda,
+            temporal_lambda=epoch_temporal_lambda,
             monotonicity_loss_fn=monotonicity_loss_fn,
         )
         final_val_metrics = val_metrics

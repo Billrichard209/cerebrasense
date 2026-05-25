@@ -1,0 +1,12 @@
+# Canonical OASIS-2 supervised split for benchmark comparisons.
+# Do not change without updating tests and the leaderboard script.
+
+dataset: oasis2
+seed: 42
+split_seed: 42
+train_fraction: 0.7
+val_fraction: 0.15
+test_fraction: 0.15
+reports_subdirectory: oasis2_supervised_seed42_split42_train70_val15_test15
+session_count: 373
+mixed_label_group_count: 16

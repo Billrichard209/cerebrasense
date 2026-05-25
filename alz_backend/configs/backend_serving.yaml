@@ -1,4 +1,5 @@
 active_oasis_model_registry: outputs/model_registry/oasis_current_baseline.json
+active_oasis2_model_registry: outputs/model_registry/oasis2_current_baseline.json
 default_device: cpu
 
 threshold_policy:

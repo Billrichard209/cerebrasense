@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Training-only extras (install on Colab GPU boxes).
+# pip install -r requirements-train.txt

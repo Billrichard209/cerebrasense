@@ -1,0 +1,27 @@
+name: Cerebrasense CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: archive (1)/alz_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run smoke tests
+        run: |
+          pytest tests/test_smoke.py \
+            tests/test_oasis2_training_improvements.py \
+            tests/test_predict_scan_pipeline.py \
+            -q --tb=short

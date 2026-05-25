@@ -752,6 +752,20 @@ def build_oasis2_training_readiness_report(
         notes.append(
             "Some patient groups contain both binary labels across visits; this is allowed, and split stratification uses an ever-positive group label."
         )
+        checks.append(
+            OASIS2TrainingReadinessCheck(
+                name="mixed_label_longitudinal_groups",
+                status="warn",
+                message=(
+                    f"{dataset_summary.get('mixed_label_group_count', 0)} patient groups have mixed visit-level labels. "
+                    "Track their error rate separately with scripts/analyze_oasis2_mixed_label_errors.py after evaluation."
+                ),
+                details={"mixed_label_group_count": dataset_summary.get("mixed_label_group_count", 0)},
+            )
+        )
+        recommendations.append(
+            "Consider training_cohort=stable_only or visit_filter ablations when validation F1 plateaus but test AUROC stays low."
+        )
 
     split_status = "fail"
     split_message = "OASIS-2 supervised split materialization was not attempted because earlier checks failed."

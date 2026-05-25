@@ -43,13 +43,19 @@ def main():
         print("Copy it from Google Drive first.")
         sys.exit(1)
 
-    # Step 1: Evaluate
+    # Step 1: Evaluate + threshold calibration
     if not args.skip_eval:
-        ok = run_step("Evaluate Model", [
-            sys.executable, "scripts/evaluate_oasis2_candidate.py",
-            "--run-name", args.run_name,
-            "--checkpoint-path", str(checkpoint),
-            "--device", args.device,
+        ok = run_step("Evaluate and Calibrate", [
+            sys.executable,
+            "scripts/evaluate_oasis2_candidate.py",
+            "--run-name",
+            args.run_name,
+            "--checkpoint-path",
+            str(checkpoint),
+            "--device",
+            args.device,
+            "--selection-metric",
+            "balanced_accuracy",
         ])
         if not ok:
             print("Evaluation failed. Stopping.")
