@@ -285,7 +285,11 @@ def evaluate_oasis_model_on_loader(
                 break
             images = batch["image"].to(device)
             labels = _coerce_labels(batch["label"], torch, device)
-            logits = model(images)
+            clinical = batch.get("clinical")
+            if clinical is not None and hasattr(model, "tabular_mlp"):
+                logits = model(images, clinical.to(device))
+            else:
+                logits = model(images)
             probabilities = torch.softmax(logits, dim=1)
             all_probabilities.extend(probabilities.detach().cpu().tolist())
             all_labels.extend(labels.detach().cpu().tolist())

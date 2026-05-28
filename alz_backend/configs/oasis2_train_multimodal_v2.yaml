@@ -1,23 +1,30 @@
-# Multimodal OASIS-2 recipe (run after oasis2_mri_baseline_v2 wins on test AUROC).
+# Reliability-focused OASIS-2 multimodal recipe.
+#
+# Goals for v2:
+# - beat oasis2_multimodal_v1 test AUROC 0.7250
+# - raise balanced accuracy to at least 0.68
+# - raise subject-consensus AUROC to at least 0.72
+# - reduce review burden below 31/60 and temporal paradoxes to at most 1
+# OASIS-2 remains a longitudinal candidate; OASIS-1 stays the active fallback.
 
 run_name: oasis2_multimodal_v2
-epochs: 40
+epochs: 50
 device: auto
 mixed_precision: true
 deterministic: true
 dry_run: false
 
 model:
-  architecture: densenet121_multimodal
+  architecture: resnet50_multimodal
 
-model_config_path:
+model_config_path: configs/oasis2_multimodal_model.yaml
 
 data:
   batch_size: 2
   gradient_accumulation_steps: 4
   num_workers: 2
-  cache_rate: 0.8
-  image_size: [128, 128, 128]
+  cache_rate: 0.0
+  image_size: [96, 96, 96]
   seed: 42
   split_seed: 42
   train_fraction: 0.7
@@ -43,10 +50,10 @@ scheduler:
 
 loss:
   name: focal_loss
-  class_weights:
-  focal_gamma: 2.0
-  temporal_lambda: 0.05
-  temporal_lambda_warmup_epochs: 10
+  class_weights: [1.05, 1.0]
+  focal_gamma: 1.0
+  temporal_lambda: 0.15
+  temporal_lambda_warmup_epochs: 8
 
 early_stopping:
   enabled: true
@@ -57,6 +64,6 @@ early_stopping:
 
 checkpoint:
   resume_from:
-  init_from_checkpoint: outputs/runs/oasis/oasis_baseline_rtx2050_gpu_seed42_split42/checkpoints/best_model.pt
+  init_from_checkpoint:
   save_best: true
   save_last: true

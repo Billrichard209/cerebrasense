@@ -45,13 +45,18 @@ def main():
         print(f"Error: CSV must contain {required_cols}")
         sys.exit(1)
 
-    # Reconstruct subject_id from sample_id (e.g., OAS2_0001_MR1 -> OAS2_0001)
+    # Reconstruct subject/session IDs. OASIS-2 exported predictions often keep
+    # subject IDs in sample_id and visit IDs in meta_session_id.
     if "meta_subject_id" in df.columns:
         df["subject_id"] = df["meta_subject_id"]
     else:
         df["subject_id"] = df["sample_id"].apply(lambda x: "_".join(str(x).split("_")[:2]))
-    
-    df["visit_order"] = df["sample_id"].apply(_extract_visit_number)
+
+    if "meta_session_id" in df.columns:
+        df["session_id"] = df["meta_session_id"].fillna(df["sample_id"]).astype(str)
+    else:
+        df["session_id"] = df["sample_id"].astype(str)
+    df["visit_order"] = df["session_id"].apply(_extract_visit_number)
     
     paradoxes = []
     total_transitions = 0
@@ -75,8 +80,8 @@ def main():
             if drop >= args.epsilon:
                 paradoxes.append({
                     "subject_id": subject_id,
-                    "visit_t_id": visit_t["sample_id"],
-                    "visit_t_plus_1_id": visit_t_plus_1["sample_id"],
+                    "visit_t_id": visit_t["session_id"],
+                    "visit_t_plus_1_id": visit_t_plus_1["session_id"],
                     "prob_t": round(prob_t, 4),
                     "prob_t_plus_1": round(prob_t_plus_1, 4),
                     "drop": round(drop, 4),

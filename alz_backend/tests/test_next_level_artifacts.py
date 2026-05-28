@@ -13,6 +13,7 @@ from src.evaluation.next_level import (
     build_model_board,
     build_next_level_artifacts,
     build_oasis2_progression_panel,
+    build_reviewer_handoff_pack,
 )
 
 
@@ -100,7 +101,10 @@ def _seed_evidence(settings: AppSettings) -> Path:
                 "meta_session_id": "ses1",
                 "meta_visit_number": 1,
                 "true_label": 0,
+                "predicted_label": 1,
                 "probability_class_1": 0.80,
+                "confidence_level": "low",
+                "normalized_entropy": 0.95,
                 "review_flag": True,
             },
             {
@@ -109,7 +113,10 @@ def _seed_evidence(settings: AppSettings) -> Path:
                 "meta_session_id": "ses2",
                 "meta_visit_number": 2,
                 "true_label": 1,
+                "predicted_label": 0,
                 "probability_class_1": 0.60,
+                "confidence_level": "medium",
+                "normalized_entropy": 0.55,
                 "review_flag": False,
             },
             {
@@ -118,7 +125,10 @@ def _seed_evidence(settings: AppSettings) -> Path:
                 "meta_session_id": "ses1",
                 "meta_visit_number": 1,
                 "true_label": 0,
+                "predicted_label": 0,
                 "probability_class_1": 0.20,
+                "confidence_level": "high",
+                "normalized_entropy": 0.25,
                 "review_flag": False,
             },
         ]
@@ -156,6 +166,26 @@ def test_progression_panel_detects_subject_risk_patterns(tmp_path: Path) -> None
     assert cases.iloc[0]["subject_id"] == "s1"
 
 
+def test_reviewer_handoff_pack_groups_hard_cases(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    predictions_path = _seed_evidence(settings)
+    progression, cases = build_oasis2_progression_panel(predictions_csv_path=predictions_path, settings=settings)
+
+    handoff = build_reviewer_handoff_pack(
+        predictions_csv_path=predictions_path,
+        progression=progression,
+        case_frame=cases,
+        settings=settings,
+    )
+
+    assert handoff["decision_support_note"] == DECISION_SUPPORT_NOTE
+    assert handoff["category_counts"]["temporal_paradox_subjects"] == 1
+    assert handoff["category_counts"]["false_positives"] == 1
+    assert handoff["category_counts"]["false_negatives"] == 1
+    assert handoff["category_counts"]["mixed_label_subjects"] == 1
+    assert handoff["review_queue"]["cases"][0]["case_type"] == "temporal_paradox_subject"
+
+
 def test_next_level_bundle_writes_frontend_payload(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     _seed_evidence(settings)
@@ -168,7 +198,17 @@ def test_next_level_bundle_writes_frontend_payload(tmp_path: Path) -> None:
     assert artifacts.progression_json_path.exists()
     assert artifacts.progression_md_path.exists()
     assert artifacts.progression_cases_csv_path.exists()
+    assert artifacts.handoff_pack_json_path.exists()
+    assert artifacts.handoff_pack_md_path.exists()
     assert artifacts.demo_payload_json_path == frontend_payload
     payload = json.loads(frontend_payload.read_text(encoding="utf-8"))
     assert payload["decision_support_note"] == DECISION_SUPPORT_NOTE
     assert payload["oasis2_candidate"]["run_name"] == "oasis2_unit"
+    assert payload["candidate_status"]["status"] == "candidate_only"
+    assert {blocker["metric"] for blocker in payload["promotion_blockers"]} >= {
+        "test_auroc",
+        "temporal_paradox_count",
+    }
+    assert payload["review_queue"]["total_case_count"] > 0
+    assert payload["paradox_summary"]["temporal_paradox_count"] == payload["progression"]["temporal_paradox_count"]
+    assert payload["handoff_pack_paths"]["json"].endswith("review_handoff_pack.json")

@@ -23,12 +23,15 @@ def _prediction_payload() -> dict[str, object]:
         "preprocessing_config": "configs/oasis_transforms.yaml",
         "input_metadata": {"scan_path": "scan.nii.gz", "dataset_assumption": "oasis1_3d_volume"},
         "ai_summary": "Decision-support model output; not a diagnosis.",
+        "clinical_narrative": "Live inference narrative for reviewer context.",
+        "review_required": False,
         "probabilities": {"nondemented": 0.33, "demented": 0.67},
         "uncertainty": {"confidence": 0.67},
         "decision_support_only": True,
         "clinical_disclaimer": "This output is for research and clinical decision support only. It is not a diagnosis.",
         "abnormal_regions": [],
         "heatmap_visualization": None,
+        "explainability": {"method": "grad_cam_style_3d", "artifacts": {"report_json": "explanation_report.json"}},
         "outputs": {"prediction_json": "prediction.json"},
         "notes": ["Decision-support only."],
     }
@@ -827,6 +830,8 @@ def test_predict_scan_route_uses_service_layer(monkeypatch) -> None:
     assert payload["decision_support_only"] is True
     assert "not a diagnosis" in payload["ai_summary"].lower()
     assert payload["confidence_level"] == "medium"
+    assert payload["clinical_narrative"] == "Live inference narrative for reviewer context."
+    assert payload["explainability"]["method"] == "grad_cam_style_3d"
 
 
 def test_explain_scan_route_uses_service_layer(monkeypatch) -> None:
@@ -957,3 +962,16 @@ def test_api_key_auth_can_protect_ai_routes(monkeypatch) -> None:
 
     assert blocked.status_code == 401
     assert allowed.status_code == 200
+
+
+def test_dashboard_data_route_remains_public_when_api_key_is_configured(monkeypatch) -> None:
+    """The frontend dashboard bootstrap route should stay readable without X-API-Key."""
+
+    monkeypatch.setenv("ALZ_API_KEY", "secret-dev-key")
+    monkeypatch.setattr("src.api.routers.dashboard.build_dashboard_payload", lambda: {"subjects": []})
+    client = TestClient(create_app())
+
+    response = client.get("/dashboard/data")
+
+    assert response.status_code == 200
+    assert response.json() == {"subjects": []}

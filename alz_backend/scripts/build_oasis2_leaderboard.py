@@ -26,6 +26,7 @@ def _load_metrics(path: Path) -> dict:
 
 def _find_prediction_csv(run_root: Path) -> Path | None:
     candidates = [
+        run_root / "evaluation" / "post_train_test_best_model_threshold_balanced_accuracy" / "predictions.csv",
         run_root / "evaluation" / "post_train_test_best_model" / "predictions.csv",
         run_root / "evaluation" / "post_train_test_best_model_threshold_youden_index" / "predictions.csv",
         run_root / "evaluation" / "post_train_val_best_model" / "predictions.csv",
@@ -34,6 +35,29 @@ def _find_prediction_csv(run_root: Path) -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def _find_calibrated_metrics(run_root: Path) -> dict:
+    preferred = run_root / "evaluation" / "post_train_test_best_model_threshold_balanced_accuracy" / "metrics.json"
+    if preferred.exists():
+        return _load_metrics(preferred)
+    candidates = sorted(
+        run_root.glob("evaluation/post_train_test_best_model_threshold_*/metrics.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return _load_metrics(candidates[0]) if candidates else {}
+
+
+def _balanced_accuracy(metrics: dict) -> float | None:
+    sensitivity = metrics.get("sensitivity", metrics.get("recall_sensitivity"))
+    specificity = metrics.get("specificity")
+    try:
+        if sensitivity is None or specificity is None:
+            return None
+        return (float(sensitivity) + float(specificity)) / 2.0
+    except (TypeError, ValueError):
+        return None
 
 
 def _mixed_group_error_rate(predictions_csv: Path, train_manifest: Path | None) -> float | None:
@@ -69,9 +93,11 @@ def collect_run_rows(runs_root: Path, split_manifest_root: Path | None) -> list[
             continue
         val_metrics = _load_metrics(run_dir / "evaluation" / "post_train_val_best_model" / "metrics.json")
         test_metrics = _load_metrics(run_dir / "evaluation" / "post_train_test_best_model" / "metrics.json")
-        test_calibrated = _load_metrics(
-            run_dir / "evaluation" / "post_train_test_best_model_threshold_youden_index" / "metrics.json"
-        )
+        test_calibrated = _find_calibrated_metrics(run_dir)
+        test_base = test_metrics or test_calibrated
+        balanced_acc = test_calibrated.get("balanced_accuracy", test_base.get("balanced_accuracy"))
+        if balanced_acc is None:
+            balanced_acc = _balanced_accuracy(test_calibrated or test_base)
         epoch_csv = run_dir / "metrics" / "epoch_metrics.csv"
         val_auroc_train = None
         if epoch_csv.exists():
@@ -92,17 +118,34 @@ def collect_run_rows(runs_root: Path, split_manifest_root: Path | None) -> list[
                 "val_auroc": val_metrics.get("auroc"),
                 "val_accuracy": val_metrics.get("accuracy"),
                 "val_f1": val_metrics.get("f1"),
-                "test_auroc": test_metrics.get("auroc"),
-                "test_accuracy": test_metrics.get("accuracy"),
-                "test_balanced_acc": test_calibrated.get("balanced_accuracy", test_metrics.get("balanced_accuracy")),
-                "test_specificity": test_calibrated.get("specificity", test_metrics.get("specificity")),
-                "test_f1": test_calibrated.get("f1", test_metrics.get("f1")),
+                "test_auroc": test_base.get("auroc"),
+                "test_accuracy": test_base.get("accuracy"),
+                "test_balanced_acc": balanced_acc,
+                "test_sensitivity": test_calibrated.get(
+                    "sensitivity",
+                    test_base.get("sensitivity", test_base.get("recall_sensitivity")),
+                ),
+                "test_specificity": test_calibrated.get("specificity", test_base.get("specificity")),
+                "test_f1": test_calibrated.get("f1", test_base.get("f1")),
+                "threshold": test_calibrated.get("threshold", test_base.get("threshold")),
+                "review_required_count": test_calibrated.get(
+                    "review_required_count",
+                    test_base.get("review_required_count"),
+                ),
+                "subject_consensus_auroc": test_calibrated.get("subject_consensus", {}).get("auroc"),
                 "best_val_auroc_training": val_auroc_train,
                 "mixed_group_error_rate": mixed_error,
                 "has_test_predictions": predictions_csv is not None,
             }
         )
-    return rows
+    return sorted(
+        rows,
+        key=lambda row: (
+            row.get("test_auroc") is None,
+            -(float(row.get("test_auroc") or 0.0)),
+            str(row.get("run_name") or ""),
+        ),
+    )
 
 
 def write_training_summary(rows: list[dict], output_path: Path) -> None:
@@ -118,6 +161,7 @@ def write_training_summary(rows: list[dict], output_path: Path) -> None:
         lines.append("_No OASIS-2 runs found under outputs/runs/oasis2._")
     else:
         frame = pd.DataFrame(rows).sort_values("test_auroc", ascending=False, na_position="last")
+        frame.insert(0, "rank", range(1, len(frame) + 1))
         headers = list(frame.columns)
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
@@ -153,7 +197,10 @@ def main() -> None:
 
     leaderboard_dir = ensure_directory(settings.outputs_root / "experiments")
     leaderboard_csv = leaderboard_dir / "oasis2_leaderboard.csv"
-    pd.DataFrame(rows).to_csv(leaderboard_csv, index=False)
+    leaderboard_frame = pd.DataFrame(rows)
+    if not leaderboard_frame.empty:
+        leaderboard_frame.insert(0, "rank", range(1, len(leaderboard_frame) + 1))
+    leaderboard_frame.to_csv(leaderboard_csv, index=False)
 
     summary_path = (
         Path(args.workspace_root).resolve() / "training_summary.md"

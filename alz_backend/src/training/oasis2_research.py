@@ -38,7 +38,7 @@ from .oasis_research import (
     _load_shape_compatible_pretrain,
     _resolve_device,
     _resolve_monitor_value,
-    _resolve_loss_class_weights,
+    resolve_loss_class_weights,
     _run_epoch,
     _save_checkpoint,
     _step_scheduler,

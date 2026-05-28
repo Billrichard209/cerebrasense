@@ -1,0 +1,23 @@
+# OASIS-2 multimodal candidate model configuration.
+#
+# This config mirrors the Colab OASIS-2 multimodal v1 checkpoint architecture.
+# It remains decision-support research software and is not a diagnostic device.
+
+dataset: oasis1
+task: binary_3d_mri_classification
+architecture: resnet50_multimodal
+class_names:
+  - nondemented
+  - demented
+expected_input_shape: [1, 1, 96, 96, 96]
+
+densenet:
+  name: densenet121
+  spatial_dims: 3
+  in_channels: 1
+  out_channels: 2
+  dropout_prob: 0.3
+
+embeddings:
+  enabled: false
+  hook_module_name: class_layers.flatten

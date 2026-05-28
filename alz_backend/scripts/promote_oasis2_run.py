@@ -15,7 +15,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.configs.runtime import get_app_settings  # noqa: E402
 from src.models.registry import ModelRegistryEntry, save_oasis_model_entry  # noqa: E402
 from src.security.disclaimers import STANDARD_DECISION_SUPPORT_DISCLAIMER  # noqa: E402
-from src.utils.io_utils import ensure_directory  # noqa: E402
 
 PROMOTION_GATES = {
     "test_auroc": 0.80,
@@ -32,6 +31,37 @@ def _load_json(path: Path) -> dict:
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else {}
+
+
+def _resolve_model_config_path(*, run_root: Path, settings) -> Path:
+    resolved_config = _load_json(run_root / "configs" / "resolved_config.json")
+    architecture = (
+        resolved_config.get("training", {}).get("model", {}).get("architecture")
+        or resolved_config.get("model", {}).get("architecture")
+    )
+    multimodal_config = settings.project_root / "configs" / "oasis2_multimodal_model.yaml"
+    if str(architecture) == "resnet50_multimodal" and multimodal_config.exists():
+        return multimodal_config.resolve()
+    return (settings.project_root / "configs" / "oasis_model.yaml").resolve()
+
+
+def _resolve_image_size(*, run_root: Path) -> list[int]:
+    resolved_config = _load_json(run_root / "configs" / "resolved_config.json")
+    image_size = resolved_config.get("training", {}).get("data", {}).get("image_size")
+    if isinstance(image_size, list) and len(image_size) == 3:
+        return [int(value) for value in image_size]
+    return [128, 128, 128]
+
+
+def _balanced_accuracy(metrics: dict) -> float:
+    sensitivity = metrics.get("sensitivity", metrics.get("recall_sensitivity"))
+    specificity = metrics.get("specificity")
+    try:
+        if sensitivity is not None and specificity is not None:
+            return (float(sensitivity) + float(specificity)) / 2.0
+    except (TypeError, ValueError):
+        pass
+    return float(metrics.get("balanced_accuracy", metrics.get("accuracy", 0.0)) or 0.0)
 
 
 def evaluate_promotion_gates(*, run_name: str, settings) -> tuple[bool, list[str], dict]:
@@ -51,7 +81,7 @@ def evaluate_promotion_gates(*, run_name: str, settings) -> tuple[bool, list[str
     test_auroc = float(metrics.get("auroc", 0.0))
     if test_auroc < PROMOTION_GATES["test_auroc"]:
         failures.append(f"test_auroc {test_auroc:.4f} < {PROMOTION_GATES['test_auroc']}")
-    balanced = float(metrics.get("balanced_accuracy", metrics.get("accuracy", 0.0)))
+    balanced = _balanced_accuracy(metrics)
     if balanced < PROMOTION_GATES["balanced_accuracy"]:
         failures.append(f"balanced_accuracy {balanced:.4f} < {PROMOTION_GATES['balanced_accuracy']}")
     specificity = float(metrics.get("specificity", 0.0))
@@ -81,7 +111,11 @@ def evaluate_promotion_gates(*, run_name: str, settings) -> tuple[bool, list[str
 def main() -> None:
     parser = argparse.ArgumentParser(description="Promote an OASIS-2 run when quality gates pass.")
     parser.add_argument("--run-name", type=str, required=True)
-    parser.add_argument("--force", action="store_true", help="Promote even when gates fail (not recommended).")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Write a candidate registry even when gates fail; serving restrictions remain conservative.",
+    )
     parser.add_argument("--registry-output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -104,15 +138,16 @@ def main() -> None:
     val_metrics = _load_json(run_root / "evaluation" / "post_train_val_best_model" / "metrics.json")
     recommended_threshold = float(calibration.get("threshold", 0.5))
 
+    forced_candidate = args.force and not passed
     entry = ModelRegistryEntry(
         registry_version="1.0",
         model_id="oasis2_current_baseline",
         dataset="oasis2",
         run_name=args.run_name,
         checkpoint_path=str(checkpoint.resolve()),
-        model_config_path=str((settings.project_root / "configs" / "oasis_model.yaml").resolve()),
+        model_config_path=str(_resolve_model_config_path(run_root=run_root, settings=settings)),
         preprocessing_config_path=str((settings.project_root / "configs" / "oasis_transforms.yaml").resolve()),
-        image_size=[128, 128, 128],
+        image_size=_resolve_image_size(run_root=run_root),
         promoted_at_utc=datetime.now(timezone.utc).isoformat(),
         decision_support_only=True,
         clinical_disclaimer=STANDARD_DECISION_SUPPORT_DISCLAIMER,
@@ -123,13 +158,25 @@ def main() -> None:
         test_metrics=test_metrics,
         promotion_decision={
             "approved": passed,
-            "forced": args.force and not passed,
+            "forced": forced_candidate,
             "gate_summary": summary,
             "failures": failures,
         },
+        operational_status="candidate" if forced_candidate else "active",
+        serving_restrictions={
+            "force_manual_review": forced_candidate,
+            "allow_prediction_output": True,
+            "block_as_operational_default": forced_candidate,
+        },
+        hold_decision={
+            "reason": "Quality gates not fully passed; OASIS-2 remains a longitudinal candidate."
+        }
+        if forced_candidate
+        else {},
         notes=[
             "OASIS-2 longitudinal decision-support registry entry.",
             "Promotion requires held-out test metrics and zero temporal paradoxes unless --force is used.",
+            "Forced entries are candidate-only and must not replace the OASIS-1 stable fallback.",
         ],
     )
     registry_path = args.registry_output or (settings.outputs_root / "model_registry" / "oasis2_current_baseline.json")

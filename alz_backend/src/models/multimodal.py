@@ -82,14 +82,12 @@ class OASISMultimodalResNet(nn.Module):
     ):
         super().__init__()
         
-        # Load pre-trained ResNet50
+        # Build the architecture only; imported checkpoints provide trained weights.
         resnet_cls = load_monai_network_symbols()["resnet50"]
-        # Note: pretrained=True downloads MedicalNet weights. 
-        # MONAI requires n_input_channels=1 and feed_forward=False for these weights.
         self.resnet = resnet_cls(
             spatial_dims=spatial_dims,
             n_input_channels=in_channels,
-            pretrained=True,
+            pretrained=False,
             feed_forward=False,
             shortcut_type="B",
             bias_downsample=False

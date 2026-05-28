@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +105,17 @@ def load_oasis2_model_for_evaluation(
 
     training_cfg = _load_training_config(cfg)
     model_cfg = load_oasis_model_config(cfg.model_config_path or training_cfg.model_config_path)
+    if cfg.model_config_path is None:
+        resolved_settings = settings or get_app_settings()
+        resolved_config_path = resolve_oasis2_run_root(resolved_settings, cfg.run_name) / "configs" / "resolved_config.json"
+        if resolved_config_path.exists():
+            resolved_payload = json.loads(resolved_config_path.read_text(encoding="utf-8"))
+            architecture = (
+                resolved_payload.get("training", {}).get("model", {}).get("architecture")
+                or resolved_payload.get("model", {}).get("architecture")
+            )
+            if architecture:
+                model_cfg = replace(model_cfg, architecture=str(architecture))
     checkpoint = load_oasis_checkpoint(resolve_oasis2_checkpoint_path(cfg, settings=settings), device=cfg.device)
     model = build_model(model_cfg)
     model.load_state_dict(checkpoint.model_state_dict)

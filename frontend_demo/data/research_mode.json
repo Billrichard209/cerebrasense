@@ -1,0 +1,450 @@
+{
+  "generated_at": "2026-05-28T18:11:10.487761+00:00",
+  "mode": "research",
+  "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context.",
+  "headline": "OASIS-2 longitudinal candidate board",
+  "active_model": {
+    "run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+    "dataset": "oasis1",
+    "auroc": 0.8793650793650795,
+    "f1": 0.8484848484848485,
+    "review_required_count": 10
+  },
+  "oasis2_candidate": {
+    "run_name": "oasis2_multimodal_v1",
+    "auroc": 0.7250293772032903,
+    "f1": 0.6071428571428571,
+    "sensitivity": 0.7391304347826086,
+    "specificity": 0.5675675675675675,
+    "balanced_accuracy": 0.6533490011750881,
+    "review_required_count": 31,
+    "subject_consensus_auroc": 0.6818181818181818,
+    "recommendation": "keep_oasis1_active"
+  },
+  "candidate_status": {
+    "status": "candidate_only",
+    "label": "Candidate only",
+    "reason": "OASIS-2 remains a longitudinal research candidate until promotion gates pass.",
+    "baseline_locked": {
+      "run_name": "oasis2_multimodal_v1",
+      "test_auroc": 0.7250293772032903,
+      "balanced_accuracy": 0.6533490011750881,
+      "subject_consensus_auroc": 0.6818181818181818,
+      "review_required_count": 31,
+      "temporal_paradox_count": 4
+    },
+    "v2_acceptance_targets": {
+      "test_auroc": 0.7250293772032903,
+      "subject_consensus_auroc": 0.72,
+      "balanced_accuracy": 0.68,
+      "review_required_count_max": 30,
+      "temporal_paradox_count_max": 1
+    }
+  },
+  "promotion_blockers": [
+    {
+      "metric": "test_auroc",
+      "actual": 0.725029,
+      "target": 0.8,
+      "comparator": ">=",
+      "message": "test_auroc 0.725 does not meet >= 0.800."
+    },
+    {
+      "metric": "balanced_accuracy",
+      "actual": 0.653349,
+      "target": 0.75,
+      "comparator": ">=",
+      "message": "balanced_accuracy 0.653 does not meet >= 0.750."
+    },
+    {
+      "metric": "specificity",
+      "actual": 0.567568,
+      "target": 0.7,
+      "comparator": ">=",
+      "message": "specificity 0.568 does not meet >= 0.700."
+    },
+    {
+      "metric": "subject_consensus_auroc",
+      "actual": 0.681818,
+      "target": 0.78,
+      "comparator": ">=",
+      "message": "subject_consensus_auroc 0.682 does not meet >= 0.780."
+    },
+    {
+      "metric": "temporal_paradox_count",
+      "actual": 4.0,
+      "target": 0,
+      "comparator": "<=",
+      "message": "temporal_paradox_count 4.000 does not meet <= 0.000."
+    }
+  ],
+  "progression": {
+    "subject_count": 23,
+    "temporal_paradox_count": 4,
+    "high_priority_subject_count": 21,
+    "top_subjects": [
+      {
+        "subject_id": "OAS2_0036",
+        "session_count": 4,
+        "first_session": "OAS2_0036_MR1",
+        "last_session": "OAS2_0036_MR5",
+        "first_risk": 0.9113732832903682,
+        "last_risk": 0.291405439376831,
+        "max_risk": 0.9113732832903682,
+        "risk_delta": -0.619968,
+        "temporal_paradox_count": 2,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0126",
+        "session_count": 3,
+        "first_session": "OAS2_0126_MR1",
+        "last_session": "OAS2_0126_MR3",
+        "first_risk": 0.5361467440084593,
+        "last_risk": 0.8056162355656553,
+        "max_risk": 0.8056162355656553,
+        "risk_delta": 0.269469,
+        "temporal_paradox_count": 1,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0018",
+        "session_count": 3,
+        "first_session": "OAS2_0018_MR1",
+        "last_session": "OAS2_0018_MR4",
+        "first_risk": 0.6249116845402624,
+        "last_risk": 0.5943982424021291,
+        "max_risk": 0.6249116845402624,
+        "risk_delta": -0.030513,
+        "temporal_paradox_count": 1,
+        "mixed_label_subject": true,
+        "review_required_count": 3,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0165",
+        "session_count": 2,
+        "first_session": "OAS2_0165_MR1",
+        "last_session": "OAS2_0165_MR2",
+        "first_risk": 0.7582536678725631,
+        "last_risk": 0.9999999998655174,
+        "max_risk": 0.9999999998655174,
+        "risk_delta": 0.241746,
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 0,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0104",
+        "session_count": 2,
+        "first_session": "OAS2_0104_MR1",
+        "last_session": "OAS2_0104_MR2",
+        "first_risk": 0.9999471826744794,
+        "last_risk": 0.999997536129188,
+        "max_risk": 0.999997536129188,
+        "risk_delta": 5e-05,
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 0,
+        "high_priority": true
+      }
+    ]
+  },
+  "paradox_summary": {
+    "temporal_paradox_count": 4,
+    "temporal_paradox_epsilon": 0.15,
+    "high_priority_subject_count": 21,
+    "top_subjects": [
+      {
+        "subject_id": "OAS2_0036",
+        "session_count": 4,
+        "first_session": "OAS2_0036_MR1",
+        "last_session": "OAS2_0036_MR5",
+        "first_risk": 0.9113732832903682,
+        "last_risk": 0.291405439376831,
+        "max_risk": 0.9113732832903682,
+        "risk_delta": -0.619968,
+        "temporal_paradox_count": 2,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0126",
+        "session_count": 3,
+        "first_session": "OAS2_0126_MR1",
+        "last_session": "OAS2_0126_MR3",
+        "first_risk": 0.5361467440084593,
+        "last_risk": 0.8056162355656553,
+        "max_risk": 0.8056162355656553,
+        "risk_delta": 0.269469,
+        "temporal_paradox_count": 1,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0018",
+        "session_count": 3,
+        "first_session": "OAS2_0018_MR1",
+        "last_session": "OAS2_0018_MR4",
+        "first_risk": 0.6249116845402624,
+        "last_risk": 0.5943982424021291,
+        "max_risk": 0.6249116845402624,
+        "risk_delta": -0.030513,
+        "temporal_paradox_count": 1,
+        "mixed_label_subject": true,
+        "review_required_count": 3,
+        "high_priority": true
+      }
+    ]
+  },
+  "review_queue": {
+    "total_case_count": 20,
+    "cases": [
+      {
+        "case_type": "temporal_paradox_subject",
+        "priority": "critical",
+        "subject_id": "OAS2_0036",
+        "session_id": "OAS2_0036_MR5",
+        "risk_score": 0.291405,
+        "temporal_paradox_count": 2,
+        "risk_delta": -0.619968,
+        "reason": "Longitudinal risk dropped beyond the paradox threshold."
+      },
+      {
+        "case_type": "temporal_paradox_subject",
+        "priority": "critical",
+        "subject_id": "OAS2_0126",
+        "session_id": "OAS2_0126_MR3",
+        "risk_score": 0.805616,
+        "temporal_paradox_count": 1,
+        "risk_delta": 0.269469,
+        "reason": "Longitudinal risk dropped beyond the paradox threshold."
+      },
+      {
+        "case_type": "temporal_paradox_subject",
+        "priority": "critical",
+        "subject_id": "OAS2_0018",
+        "session_id": "OAS2_0018_MR4",
+        "risk_score": 0.594398,
+        "temporal_paradox_count": 1,
+        "risk_delta": -0.030513,
+        "reason": "Longitudinal risk dropped beyond the paradox threshold."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0118",
+        "session_id": "OAS2_0118_MR2",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.32957,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0017",
+        "session_id": "OAS2_0017_MR3",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.331935,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0063",
+        "session_id": "OAS2_0063_MR1",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.348338,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0048",
+        "session_id": "OAS2_0048_MR1",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.376921,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0048",
+        "session_id": "OAS2_0048_MR2",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.378019,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_negative",
+        "priority": "critical",
+        "subject_id": "OAS2_0031",
+        "session_id": "OAS2_0031_MR3",
+        "true_label": 1,
+        "predicted_label": 0,
+        "risk_score": 0.435122,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Demented label predicted as non-demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0156",
+        "session_id": "OAS2_0156_MR1",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.999003,
+        "confidence_level": "high",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0156",
+        "session_id": "OAS2_0156_MR2",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.958539,
+        "confidence_level": "high",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0036",
+        "session_id": "OAS2_0036_MR1",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.911373,
+        "confidence_level": "medium",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0095",
+        "session_id": "OAS2_0095_MR3",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.836335,
+        "confidence_level": "medium",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0158",
+        "session_id": "OAS2_0158_MR2",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.814678,
+        "confidence_level": "medium",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0126",
+        "session_id": "OAS2_0126_MR3",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.805616,
+        "confidence_level": "medium",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0138",
+        "session_id": "OAS2_0138_MR2",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.741421,
+        "confidence_level": "medium",
+        "review_required": false,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "false_positive",
+        "priority": "high",
+        "subject_id": "OAS2_0017",
+        "session_id": "OAS2_0017_MR4",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.677017,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Non-demented label predicted as demented."
+      },
+      {
+        "case_type": "low_confidence",
+        "priority": "medium",
+        "subject_id": "OAS2_0095",
+        "session_id": "OAS2_0095_MR2",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.495986,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Low confidence or explicit review flag."
+      },
+      {
+        "case_type": "low_confidence",
+        "priority": "medium",
+        "subject_id": "OAS2_0036",
+        "session_id": "OAS2_0036_MR3",
+        "true_label": 0,
+        "predicted_label": 1,
+        "risk_score": 0.519285,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Low confidence or explicit review flag."
+      },
+      {
+        "case_type": "low_confidence",
+        "priority": "medium",
+        "subject_id": "OAS2_0114",
+        "session_id": "OAS2_0114_MR1",
+        "true_label": 1,
+        "predicted_label": 1,
+        "risk_score": 0.477299,
+        "confidence_level": "low",
+        "review_required": true,
+        "reason": "Low confidence or explicit review flag."
+      }
+    ]
+  },
+  "handoff_pack_paths": {
+    "json": "alz_backend/outputs/reports/next_level/current/review_handoff_pack.json",
+    "markdown": "alz_backend/outputs/reports/next_level/current/review_handoff_pack.md"
+  }
+}

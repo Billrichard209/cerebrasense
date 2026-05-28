@@ -638,12 +638,16 @@ class ScanPredictionResponse(BaseModel):
     serving_restrictions: dict[str, Any] = Field(default_factory=dict)
     input_metadata: dict[str, Any] = Field(default_factory=dict)
     ai_summary: str
+    clinical_narrative: str | None = None
+    review_required: bool | None = None
     probabilities: dict[str, float] = Field(default_factory=dict)
     uncertainty: dict[str, Any] = Field(default_factory=dict)
     decision_support_only: bool
     clinical_disclaimer: str | None = None
     abnormal_regions: list[Any] = Field(default_factory=list)
     heatmap_visualization: str | None = None
+    explainability: dict[str, Any] | None = None
+    explainability_error: str | None = None
     outputs: dict[str, Any] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
 
