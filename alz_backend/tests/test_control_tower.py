@@ -218,3 +218,19 @@ def test_control_tower_gates_pass_marks_export_review_ready_not_promoted() -> No
     assert payload["control_tower_status"]["candidate_only"] is True
     assert payload["next_best_action"]["id"] == "prepare_onnx_export_review"
     assert "auto" not in json.dumps(payload["control_tower_status"]).lower()
+
+
+def test_control_tower_windows_launchers_are_quoted() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    workspace_root = project_root.parent
+    wrappers = [
+        workspace_root / "build_cerebrasense_control_tower.cmd",
+        project_root / "build_cerebrasense_control_tower.cmd",
+    ]
+
+    for wrapper in wrappers:
+        text = wrapper.read_text(encoding="utf-8")
+        assert wrapper.exists()
+        assert "build_cerebrasense_control_tower.py" in text
+        assert "--frontend-payload-path" in text
+        assert '"%ROOT%' in text or '".\\alz_backend' in text
