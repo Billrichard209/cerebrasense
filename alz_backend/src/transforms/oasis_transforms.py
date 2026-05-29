@@ -26,15 +26,24 @@ import yaml
 from src.utils.io_utils import resolve_project_root
 from src.utils.monai_utils import load_monai_transform_symbols
 
-from src.utils.monai_utils import load_monai_transform_symbols
-
 _load_monai_transform_symbols = load_monai_transform_symbols
+
 
 class ExtractClinicalFeaturesd:
     """Extract clinical features (Age, Sex, MMSE) from the meta dictionary into a tensor."""
+
     def __init__(self, keys=("meta",), output_key="clinical"):
         self.keys = keys
         self.output_key = output_key
+
+    def __getitem__(self, key: str) -> Any:
+        """Expose a small dict-like surface for transform introspection tests."""
+
+        if key == "name":
+            return self.__class__.__name__
+        if key == "kwargs":
+            return {"keys": self.keys, "output_key": self.output_key}
+        raise KeyError(key)
 
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         d = dict(data)
@@ -431,11 +440,12 @@ def _build_train_aug_steps(cfg: OASISTransformConfig) -> list[tuple[str, object]
                 ),
             )
         )
-    if cfg.augmentation.elastic_probability > 0:
+    elastic_transform = symbols.get("Rand3DElasticd")
+    if cfg.augmentation.elastic_probability > 0 and elastic_transform is not None:
         steps.append(
             (
                 "elastic_augmentation",
-                symbols["Rand3DElasticd"](
+                elastic_transform(
                     keys=list(cfg.load.keys),
                     prob=cfg.augmentation.elastic_probability,
                     sigma_range=cfg.augmentation.elastic_sigma_range,

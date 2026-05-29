@@ -1260,6 +1260,29 @@ ul { list-style: none; }
   font-size: var(--text-lg);
 }
 
+.research-action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.research-action-button {
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.research-action-button.ready {
+  color: var(--primary-light);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
 .research-card-list {
   display: grid;
   gap: var(--sp-3);
@@ -1391,6 +1414,7 @@ ul { list-style: none; }
   }
 
   .research-metric-strip,
+  .research-action-row,
   .research-case {
     grid-template-columns: 1fr;
   }

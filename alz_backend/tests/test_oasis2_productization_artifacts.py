@@ -65,6 +65,19 @@ def test_oasis2_multimodal_v2_config_keeps_reliability_pipeline() -> None:
     assert cfg.loss.temporal_lambda == 0.15
 
 
+def test_oasis2_multimodal_ladder_configs_keep_same_pipeline() -> None:
+    temporal_cfg = load_research_oasis_training_config(Path("configs/oasis2_train_multimodal_v3_temporal.yaml"))
+    consensus_cfg = load_research_oasis_training_config(Path("configs/oasis2_train_multimodal_v4_subject_consensus.yaml"))
+
+    assert temporal_cfg.run_name == "oasis2_multimodal_v3_temporal"
+    assert consensus_cfg.run_name == "oasis2_multimodal_v4_subject_consensus"
+    assert temporal_cfg.model.architecture == "resnet50_multimodal"
+    assert consensus_cfg.model.architecture == "resnet50_multimodal"
+    assert temporal_cfg.model_config_path == Path("configs/oasis2_multimodal_model.yaml")
+    assert consensus_cfg.model_config_path == Path("configs/oasis2_multimodal_model.yaml")
+    assert temporal_cfg.loss.temporal_lambda > consensus_cfg.loss.temporal_lambda >= 0.2
+
+
 def test_temporal_audit_uses_meta_session_ids(tmp_path: Path, capsys) -> None:
     from scripts.audit_temporal_paradoxes import main
 

@@ -1617,6 +1617,27 @@ function formatCaseType(value) {
     .replace(/\b\w/g, char => char.toUpperCase());
 }
 
+function formatDelta(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  const number = Number(value);
+  return `${number >= 0 ? "+" : ""}${number.toFixed(3)}`;
+}
+
+function bindResearchActionButtons() {
+  document.querySelectorAll(".research-action-button[data-command]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const command = button.getAttribute("data-command");
+      if (!command) return;
+      try {
+        await navigator.clipboard.writeText(command);
+        button.textContent = "Command copied";
+      } catch (err) {
+        button.textContent = "Copy unavailable";
+      }
+    });
+  });
+}
+
 function renderResearchMode() {
   const payload = state.researchPayload;
   const status = document.getElementById("researchStatus");
@@ -1628,6 +1649,7 @@ function renderResearchMode() {
   const summary = document.getElementById("researchProgressionSummary");
   const list = document.getElementById("researchProgressionList");
   const disclaimer = document.getElementById("researchDisclaimer");
+  const actions = document.getElementById("researchDemoActions");
   if (!status || !list) return;
 
   if (!payload) {
@@ -1637,8 +1659,9 @@ function renderResearchMode() {
     activeAuroc.textContent = "--";
     oasis2Auroc.textContent = "--";
     reviewCount.textContent = "--";
-    summary.textContent = "Run build_next_level_artifacts.py to load model evidence.";
+    summary.textContent = "Run build_cerebrasense_control_tower.py to load model evidence.";
     disclaimer.textContent = "Research decision-support only. Not diagnosis.";
+    if (actions) actions.innerHTML = "";
     list.innerHTML = `
       <div class="research-empty">
         <strong>No generated cases loaded</strong>
@@ -1653,19 +1676,43 @@ function renderResearchMode() {
   const candidateStatus = payload.candidate_status || {};
   const promotionBlockers = payload.promotion_blockers || [];
   const progression = payload.progression || {};
+  const trajectory = payload.trajectory_intelligence || {};
+  const readiness = payload.deployment_readiness || {};
+  const controlTower = payload.control_tower_status || {};
+  const nextBestAction = payload.next_best_action || {};
+  const evidenceHealth = payload.evidence_health || {};
+  const deploymentHealth = payload.deployment_health || {};
+  const activeVsCandidate = payload.active_vs_candidate_deltas || payload.active_vs_candidate || {};
   const reviewQueue = payload.review_queue || {};
   const queueCases = reviewQueue.cases || [];
   const subjects = progression.top_subjects || [];
   const handoffCount = reviewQueue.total_case_count ?? queueCases.length;
+  const demoActions = payload.demo_bundle_actions?.actions || [];
 
-  status.textContent = `${payload.headline || "Generated research payload loaded"} - ${candidateStatus.label || "Research candidate"}`;
+  status.textContent = `${payload.headline || "Generated research payload loaded"} - ${controlTower.label || candidateStatus.label || "Research candidate"} - ${deploymentHealth.readiness_status || readiness.readiness_status || "readiness pending"}`;
   activeModel.textContent = active.run_name || "OASIS-1 stable baseline";
   oasis2Model.textContent = `${oasis2.run_name || "OASIS-2 pending evaluation"}${candidateStatus.label ? ` (${candidateStatus.label})` : ""}`;
   activeAuroc.textContent = formatMetric(active.auroc);
   oasis2Auroc.textContent = formatMetric(oasis2.auroc);
   reviewCount.textContent = String(oasis2.review_required_count ?? handoffCount ?? progression.high_priority_subject_count ?? "--");
-  summary.textContent = `${progression.subject_count || 0} subjects, ${progression.temporal_paradox_count || 0} temporal paradox flags, ${promotionBlockers.length || 0} promotion blockers, ${handoffCount || 0} handoff cases`;
+  summary.textContent = `${progression.subject_count || 0} subjects, ${progression.temporal_paradox_count || 0} temporal paradox flags, ${trajectory.review_subject_count || 0} trajectory reviews, ${promotionBlockers.length || 0} blockers, AUROC delta ${formatDelta(activeVsCandidate.auroc_delta)}, evidence ${evidenceHealth.status || "pending"}, next ${nextBestAction.label || "review evidence"}`;
   disclaimer.textContent = payload.decision_support_note || "Research decision-support only. Not diagnosis.";
+  if (actions) {
+    const actionChips = [
+      nextBestAction.command ? {
+        label: nextBestAction.label || "Next best action",
+        status: nextBestAction.priority === "critical" ? "critical" : "ready",
+        command: nextBestAction.command
+      } : null,
+      ...demoActions.slice(0, 2)
+    ].filter(Boolean);
+    actions.innerHTML = actionChips.map(action => `
+      <button class="research-action-button ${action.status === "ready" ? "ready" : ""}" data-command="${escapeHtml(action.command || "")}" title="${escapeHtml(action.command || "")}">
+        ${escapeHtml(action.label || "Demo action")}
+      </button>
+    `).join("");
+    bindResearchActionButtons();
+  }
 
   if (queueCases.length) {
     list.innerHTML = queueCases.slice(0, 8).map(item => `
@@ -1679,8 +1726,8 @@ function renderResearchMode() {
           <strong>${formatMetric(item.risk_score ?? item.max_risk ?? item.risk_delta)}</strong>
         </div>
         <div>
-          <span>Blockers</span>
-          <strong>${escapeHtml(promotionBlockers.length || 0)}</strong>
+          <span>Review</span>
+          <strong>${escapeHtml(item.review_required ? "Yes" : readiness.readiness_status || "Track")}</strong>
         </div>
         <span class="research-status-pill">${escapeHtml(formatCaseType(item.priority || "Review"))}</span>
       </div>
@@ -1705,12 +1752,12 @@ function renderResearchMode() {
         <span>${escapeHtml(subject.session_count)} visits</span>
       </div>
       <div>
-        <span>Risk delta</span>
-        <strong>${formatMetric(subject.risk_delta)}</strong>
+        <span>Trajectory</span>
+        <strong>${formatMetric(subject.trajectory_score ?? subject.risk_delta)}</strong>
       </div>
       <div>
-        <span>Paradox</span>
-        <strong>${escapeHtml(subject.temporal_paradox_count)}</strong>
+        <span>Status</span>
+        <strong>${escapeHtml(formatCaseType(subject.trajectory_status || "Track"))}</strong>
       </div>
       <span class="research-status-pill">${subject.high_priority ? "Review" : "Track"}</span>
     </div>

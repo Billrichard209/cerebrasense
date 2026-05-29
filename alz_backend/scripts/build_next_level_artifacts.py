@@ -43,8 +43,12 @@ def main() -> int:
             {
                 "output_root": str(artifacts.output_root),
                 "model_board_json": str(artifacts.model_board_json_path),
+                "oasis2_run_registry_json": str(artifacts.run_registry_json_path),
                 "progression_json": str(artifacts.progression_json_path),
                 "review_handoff_pack_json": str(artifacts.handoff_pack_json_path),
+                "model_cards_json": str(artifacts.model_cards_json_path),
+                "deployment_readiness_json": str(artifacts.deployment_readiness_json_path),
+                "demo_bundle_manifest_json": str(artifacts.demo_bundle_manifest_json_path),
                 "frontend_payload_json": str(artifacts.demo_payload_json_path),
             },
             indent=2,

@@ -1,4 +1,4 @@
-        """Build a smaller labeled OASIS upload bundle for Drive or Colab."""
+"""Build a smaller labeled OASIS upload bundle for Drive or Colab."""
 
 from __future__ import annotations
 

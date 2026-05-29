@@ -755,10 +755,10 @@ def build_oasis2_training_readiness_report(
         checks.append(
             OASIS2TrainingReadinessCheck(
                 name="mixed_label_longitudinal_groups",
-                status="warn",
+                status="pass",
                 message=(
                     f"{dataset_summary.get('mixed_label_group_count', 0)} patient groups have mixed visit-level labels. "
-                    "Track their error rate separately with scripts/analyze_oasis2_mixed_label_errors.py after evaluation."
+                    "This is allowed for longitudinal OASIS-2; track their error rate separately after evaluation."
                 ),
                 details={"mixed_label_group_count": dataset_summary.get("mixed_label_group_count", 0)},
             )

@@ -10,6 +10,9 @@ __pycache__/
 
 # Backend-generated artifacts
 alz_backend/outputs/
+alz_backend/backend_*.log
+alz_backend/training_summary.md
+frontend_demo/frontend_*.log
 alz_backend/storage/*.sqlite3
 alz_backend/storage/*.db
 alz_backend/storage/*.log

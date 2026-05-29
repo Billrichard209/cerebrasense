@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-28T18:11:10.487761+00:00",
+  "generated_at": "2026-05-29T10:15:16.892229+00:00",
   "mode": "research",
   "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context.",
   "headline": "OASIS-2 longitudinal candidate board",
@@ -8,6 +8,8 @@
     "dataset": "oasis1",
     "auroc": 0.8793650793650795,
     "f1": 0.8484848484848485,
+    "specificity": 0.8095238095238095,
+    "balanced_accuracy": 0.8714285714285714,
     "review_required_count": 10
   },
   "oasis2_candidate": {
@@ -20,6 +22,69 @@
     "review_required_count": 31,
     "subject_consensus_auroc": 0.6818181818181818,
     "recommendation": "keep_oasis1_active"
+  },
+  "active_vs_candidate": {
+    "active_run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+    "candidate_run_name": "oasis2_multimodal_v1",
+    "auroc_delta": -0.154336,
+    "specificity_delta": -0.241956,
+    "decision": "keep_oasis1_active_until_oasis2_gates_pass"
+  },
+  "model_board_summary": {
+    "entry_count": 21,
+    "recommendation": "keep_oasis1_active",
+    "top_models": [
+      {
+        "dataset": "oasis1",
+        "run_name": "oasis_baseline_v1",
+        "role": "test_best_model",
+        "auroc": 0.8476190476190477,
+        "balanced_accuracy": 0.8714285714285714,
+        "specificity": 0.8095238095238095,
+        "review_required_count": 0,
+        "subject_consensus_auroc": 0.0
+      },
+      {
+        "dataset": "oasis1",
+        "run_name": "oasis_baseline_rtx2050_gpu_seed42_split44",
+        "role": "post_train_test_best_model",
+        "auroc": 0.8920634920634921,
+        "balanced_accuracy": 0.8714285714285714,
+        "specificity": 0.8095238095238095,
+        "review_required_count": 6,
+        "subject_consensus_auroc": 0.0
+      },
+      {
+        "dataset": "oasis1",
+        "run_name": "oasis_baseline_rtx2050_gpu_seed42",
+        "role": "post_train_test_best_model",
+        "auroc": 0.8603174603174604,
+        "balanced_accuracy": 0.8714285714285714,
+        "specificity": 0.8095238095238095,
+        "review_required_count": 4,
+        "subject_consensus_auroc": 0.0
+      },
+      {
+        "dataset": "oasis1",
+        "run_name": "oasis_baseline_rtx2050_gpu",
+        "role": "post_train_test_best_model",
+        "auroc": 0.8825396825396825,
+        "balanced_accuracy": 0.861904761904762,
+        "specificity": 0.8571428571428571,
+        "review_required_count": 13,
+        "subject_consensus_auroc": 0.0
+      },
+      {
+        "dataset": "oasis1",
+        "run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+        "role": "stable_fallback",
+        "auroc": 0.8793650793650795,
+        "balanced_accuracy": 0.8714285714285714,
+        "specificity": 0.8095238095238095,
+        "review_required_count": 10,
+        "subject_consensus_auroc": 0.0
+      }
+    ]
   },
   "candidate_status": {
     "status": "candidate_only",
@@ -78,25 +143,64 @@
       "message": "temporal_paradox_count 4.000 does not meet <= 0.000."
     }
   ],
+  "experiment_ladder": [
+    {
+      "stage": "v2_specificity",
+      "run_name": "oasis2_multimodal_v2",
+      "config_path": "configs/oasis2_train_multimodal_v2.yaml",
+      "objective": "Improve specificity, balanced accuracy, subject AUROC, review burden, and paradox count without changing the multimodal pipeline.",
+      "promotion_role": "candidate_refresh",
+      "status": "planned",
+      "config_exists": true,
+      "metrics_path": null,
+      "promotion_gate_status": null
+    },
+    {
+      "stage": "v3_temporal_consistency",
+      "run_name": "oasis2_multimodal_v3_temporal",
+      "config_path": "configs/oasis2_train_multimodal_v3_temporal.yaml",
+      "objective": "Increase temporal consistency pressure and reduce visit-to-visit contradictions.",
+      "promotion_role": "temporal_ablation",
+      "status": "planned",
+      "config_exists": true,
+      "metrics_path": null,
+      "promotion_gate_status": null
+    },
+    {
+      "stage": "v4_subject_consensus",
+      "run_name": "oasis2_multimodal_v4_subject_consensus",
+      "config_path": "configs/oasis2_train_multimodal_v4_subject_consensus.yaml",
+      "objective": "Optimize subject-level agreement and handoff burden after the temporal candidate stabilizes.",
+      "promotion_role": "subject_consensus_ablation",
+      "status": "planned",
+      "config_exists": true,
+      "metrics_path": null,
+      "promotion_gate_status": null
+    },
+    {
+      "stage": "multi_seed_confirmation",
+      "run_name": "oasis2_multimodal_reliability_multiseed",
+      "config_path": "run_oasis2_multiseed_eval.cmd",
+      "objective": "Confirm the best candidate is not a lucky seed or split artifact.",
+      "promotion_role": "stability_confirmation",
+      "status": "planned",
+      "config_exists": true,
+      "metrics_path": null,
+      "promotion_gate_status": null
+    }
+  ],
+  "run_registry": {
+    "integrity_status": "pass",
+    "run_count": 3,
+    "unique_run_names": true
+  },
   "progression": {
     "subject_count": 23,
     "temporal_paradox_count": 4,
     "high_priority_subject_count": 21,
+    "trajectory_review_subject_count": 14,
+    "trajectory_score_review_min": 0.55,
     "top_subjects": [
-      {
-        "subject_id": "OAS2_0036",
-        "session_count": 4,
-        "first_session": "OAS2_0036_MR1",
-        "last_session": "OAS2_0036_MR5",
-        "first_risk": 0.9113732832903682,
-        "last_risk": 0.291405439376831,
-        "max_risk": 0.9113732832903682,
-        "risk_delta": -0.619968,
-        "temporal_paradox_count": 2,
-        "mixed_label_subject": false,
-        "review_required_count": 2,
-        "high_priority": true
-      },
       {
         "subject_id": "OAS2_0126",
         "session_count": 3,
@@ -106,51 +210,303 @@
         "last_risk": 0.8056162355656553,
         "max_risk": 0.8056162355656553,
         "risk_delta": 0.269469,
+        "max_visit_delta": 0.4421,
+        "risk_acceleration": 0.614731,
+        "risk_volatility": 0.181924,
+        "visit_deltas": [
+          -0.172631,
+          0.4421
+        ],
         "temporal_paradox_count": 1,
         "mixed_label_subject": false,
         "review_required_count": 2,
+        "trajectory_score": 0.488388,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.536->0.806; delta 0.269; max 0.806.",
         "high_priority": true
       },
       {
-        "subject_id": "OAS2_0018",
+        "subject_id": "OAS2_0063",
+        "session_count": 2,
+        "first_session": "OAS2_0063_MR1",
+        "last_session": "OAS2_0063_MR2",
+        "first_risk": 0.3483381867408752,
+        "last_risk": 0.9998054046273396,
+        "max_risk": 0.9998054046273396,
+        "risk_delta": 0.651467,
+        "max_visit_delta": 0.651467,
+        "risk_acceleration": 0.0,
+        "risk_volatility": 0.325734,
+        "visit_deltas": [
+          0.651467
+        ],
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 1,
+        "trajectory_score": 0.486142,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "2 visits; risk 0.348->1.000; delta 0.651; max 1.000.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0140",
         "session_count": 3,
-        "first_session": "OAS2_0018_MR1",
-        "last_session": "OAS2_0018_MR4",
-        "first_risk": 0.6249116845402624,
-        "last_risk": 0.5943982424021291,
-        "max_risk": 0.6249116845402624,
-        "risk_delta": -0.030513,
+        "first_session": "OAS2_0140_MR1",
+        "last_session": "OAS2_0140_MR3",
+        "first_risk": 0.4767660938729672,
+        "last_risk": 0.994972721593954,
+        "max_risk": 0.994972721593954,
+        "risk_delta": 0.518207,
+        "max_visit_delta": 0.483413,
+        "risk_acceleration": -0.448619,
+        "risk_volatility": 0.236511,
+        "visit_deltas": [
+          0.483413,
+          0.034794
+        ],
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 1,
+        "trajectory_score": 0.448214,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.477->0.995; delta 0.518; max 0.995.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0036",
+        "session_count": 4,
+        "first_session": "OAS2_0036_MR1",
+        "last_session": "OAS2_0036_MR5",
+        "first_risk": 0.9113732832903682,
+        "last_risk": 0.291405439376831,
+        "max_risk": 0.9113732832903682,
+        "risk_delta": -0.619968,
+        "max_visit_delta": -0.392089,
+        "risk_acceleration": 0.071612,
+        "risk_volatility": 0.222345,
+        "visit_deltas": [
+          -0.392089,
+          0.092598,
+          -0.320477
+        ],
+        "temporal_paradox_count": 2,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.441233,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "4 visits; risk 0.911->0.291; delta -0.620; max 0.911.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0095",
+        "session_count": 3,
+        "first_session": "OAS2_0095_MR1",
+        "last_session": "OAS2_0095_MR3",
+        "first_risk": 0.4034236073493957,
+        "last_risk": 0.8363354206085205,
+        "max_risk": 0.8363354206085205,
+        "risk_delta": 0.432912,
+        "max_visit_delta": 0.34035,
+        "risk_acceleration": 0.247788,
+        "risk_volatility": 0.186136,
+        "visit_deltas": [
+          0.092562,
+          0.34035
+        ],
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.436241,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.403->0.836; delta 0.433; max 0.836.",
+        "high_priority": true
+      }
+    ]
+  },
+  "trajectory_intelligence": {
+    "review_subject_count": 14,
+    "score_review_min": 0.55,
+    "top_subjects": [
+      {
+        "subject_id": "OAS2_0126",
+        "session_count": 3,
+        "first_session": "OAS2_0126_MR1",
+        "last_session": "OAS2_0126_MR3",
+        "first_risk": 0.5361467440084593,
+        "last_risk": 0.8056162355656553,
+        "max_risk": 0.8056162355656553,
+        "risk_delta": 0.269469,
+        "max_visit_delta": 0.4421,
+        "risk_acceleration": 0.614731,
+        "risk_volatility": 0.181924,
+        "visit_deltas": [
+          -0.172631,
+          0.4421
+        ],
         "temporal_paradox_count": 1,
-        "mixed_label_subject": true,
-        "review_required_count": 3,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.488388,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.536->0.806; delta 0.269; max 0.806.",
         "high_priority": true
       },
       {
-        "subject_id": "OAS2_0165",
+        "subject_id": "OAS2_0063",
         "session_count": 2,
-        "first_session": "OAS2_0165_MR1",
-        "last_session": "OAS2_0165_MR2",
-        "first_risk": 0.7582536678725631,
-        "last_risk": 0.9999999998655174,
-        "max_risk": 0.9999999998655174,
-        "risk_delta": 0.241746,
+        "first_session": "OAS2_0063_MR1",
+        "last_session": "OAS2_0063_MR2",
+        "first_risk": 0.3483381867408752,
+        "last_risk": 0.9998054046273396,
+        "max_risk": 0.9998054046273396,
+        "risk_delta": 0.651467,
+        "max_visit_delta": 0.651467,
+        "risk_acceleration": 0.0,
+        "risk_volatility": 0.325734,
+        "visit_deltas": [
+          0.651467
+        ],
         "temporal_paradox_count": 0,
         "mixed_label_subject": false,
-        "review_required_count": 0,
+        "review_required_count": 1,
+        "trajectory_score": 0.486142,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "2 visits; risk 0.348->1.000; delta 0.651; max 1.000.",
         "high_priority": true
       },
       {
-        "subject_id": "OAS2_0104",
-        "session_count": 2,
-        "first_session": "OAS2_0104_MR1",
-        "last_session": "OAS2_0104_MR2",
-        "first_risk": 0.9999471826744794,
-        "last_risk": 0.999997536129188,
-        "max_risk": 0.999997536129188,
-        "risk_delta": 5e-05,
+        "subject_id": "OAS2_0140",
+        "session_count": 3,
+        "first_session": "OAS2_0140_MR1",
+        "last_session": "OAS2_0140_MR3",
+        "first_risk": 0.4767660938729672,
+        "last_risk": 0.994972721593954,
+        "max_risk": 0.994972721593954,
+        "risk_delta": 0.518207,
+        "max_visit_delta": 0.483413,
+        "risk_acceleration": -0.448619,
+        "risk_volatility": 0.236511,
+        "visit_deltas": [
+          0.483413,
+          0.034794
+        ],
         "temporal_paradox_count": 0,
         "mixed_label_subject": false,
-        "review_required_count": 0,
+        "review_required_count": 1,
+        "trajectory_score": 0.448214,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.477->0.995; delta 0.518; max 0.995.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0036",
+        "session_count": 4,
+        "first_session": "OAS2_0036_MR1",
+        "last_session": "OAS2_0036_MR5",
+        "first_risk": 0.9113732832903682,
+        "last_risk": 0.291405439376831,
+        "max_risk": 0.9113732832903682,
+        "risk_delta": -0.619968,
+        "max_visit_delta": -0.392089,
+        "risk_acceleration": 0.071612,
+        "risk_volatility": 0.222345,
+        "visit_deltas": [
+          -0.392089,
+          0.092598,
+          -0.320477
+        ],
+        "temporal_paradox_count": 2,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.441233,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "4 visits; risk 0.911->0.291; delta -0.620; max 0.911.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0095",
+        "session_count": 3,
+        "first_session": "OAS2_0095_MR1",
+        "last_session": "OAS2_0095_MR3",
+        "first_risk": 0.4034236073493957,
+        "last_risk": 0.8363354206085205,
+        "max_risk": 0.8363354206085205,
+        "risk_delta": 0.432912,
+        "max_visit_delta": 0.34035,
+        "risk_acceleration": 0.247788,
+        "risk_volatility": 0.186136,
+        "visit_deltas": [
+          0.092562,
+          0.34035
+        ],
+        "temporal_paradox_count": 0,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.436241,
+        "trajectory_status": "progression_watch",
+        "reviewer_reasons": [
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.403->0.836; delta 0.433; max 0.836.",
         "high_priority": true
       }
     ]
@@ -161,20 +517,6 @@
     "high_priority_subject_count": 21,
     "top_subjects": [
       {
-        "subject_id": "OAS2_0036",
-        "session_count": 4,
-        "first_session": "OAS2_0036_MR1",
-        "last_session": "OAS2_0036_MR5",
-        "first_risk": 0.9113732832903682,
-        "last_risk": 0.291405439376831,
-        "max_risk": 0.9113732832903682,
-        "risk_delta": -0.619968,
-        "temporal_paradox_count": 2,
-        "mixed_label_subject": false,
-        "review_required_count": 2,
-        "high_priority": true
-      },
-      {
         "subject_id": "OAS2_0126",
         "session_count": 3,
         "first_session": "OAS2_0126_MR1",
@@ -183,9 +525,57 @@
         "last_risk": 0.8056162355656553,
         "max_risk": 0.8056162355656553,
         "risk_delta": 0.269469,
+        "max_visit_delta": 0.4421,
+        "risk_acceleration": 0.614731,
+        "risk_volatility": 0.181924,
+        "visit_deltas": [
+          -0.172631,
+          0.4421
+        ],
         "temporal_paradox_count": 1,
         "mixed_label_subject": false,
         "review_required_count": 2,
+        "trajectory_score": 0.488388,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "rising risk trajectory",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "3 visits; risk 0.536->0.806; delta 0.269; max 0.806.",
+        "high_priority": true
+      },
+      {
+        "subject_id": "OAS2_0036",
+        "session_count": 4,
+        "first_session": "OAS2_0036_MR1",
+        "last_session": "OAS2_0036_MR5",
+        "first_risk": 0.9113732832903682,
+        "last_risk": 0.291405439376831,
+        "max_risk": 0.9113732832903682,
+        "risk_delta": -0.619968,
+        "max_visit_delta": -0.392089,
+        "risk_acceleration": 0.071612,
+        "risk_volatility": 0.222345,
+        "visit_deltas": [
+          -0.392089,
+          0.092598,
+          -0.320477
+        ],
+        "temporal_paradox_count": 2,
+        "mixed_label_subject": false,
+        "review_required_count": 2,
+        "trajectory_score": 0.441233,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "low-confidence or review-flagged visits",
+          "high maximum risk",
+          "volatile visit-to-visit risk"
+        ],
+        "evidence_summary": "4 visits; risk 0.911->0.291; delta -0.620; max 0.911.",
         "high_priority": true
       },
       {
@@ -197,26 +587,61 @@
         "last_risk": 0.5943982424021291,
         "max_risk": 0.6249116845402624,
         "risk_delta": -0.030513,
+        "max_visit_delta": -0.253727,
+        "risk_acceleration": 0.476941,
+        "risk_volatility": 0.113104,
+        "visit_deltas": [
+          -0.253727,
+          0.223214
+        ],
         "temporal_paradox_count": 1,
         "mixed_label_subject": true,
         "review_required_count": 3,
+        "trajectory_score": 0.43008,
+        "trajectory_status": "review_required",
+        "reviewer_reasons": [
+          "temporal paradox",
+          "mixed longitudinal labels",
+          "low-confidence or review-flagged visits"
+        ],
+        "evidence_summary": "3 visits; risk 0.625->0.594; delta -0.031; max 0.625.",
         "high_priority": true
       }
     ]
   },
+  "error_learning_loop": {
+    "taxonomy": [
+      "temporal_paradox_subjects",
+      "false_positives",
+      "false_negatives",
+      "low_confidence_cases",
+      "mixed_label_subjects"
+    ],
+    "counts": {
+      "temporal_paradox_subjects": 3,
+      "false_positives": 8,
+      "false_negatives": 6,
+      "low_confidence_cases": 8,
+      "mixed_label_subjects": 5
+    },
+    "review_thresholds": {
+      "uncertainty_band_low": 0.4,
+      "uncertainty_band_high": 0.6,
+      "high_risk_review_min": 0.7,
+      "temporal_drop_epsilon": 0.15,
+      "trajectory_score_review_min": 0.55
+    },
+    "next_actions": [
+      "Review false negatives first because missed positive labels carry the highest research risk.",
+      "Audit temporal paradox subjects before any threshold or promotion decision.",
+      "Use low-confidence cases to tune review thresholds without relabeling source data silently.",
+      "Track mixed-label subjects separately from session-level errors."
+    ],
+    "decision_policy": "Use reviewer outcomes to update thresholds and candidate notes only; do not overwrite source labels."
+  },
   "review_queue": {
     "total_case_count": 20,
     "cases": [
-      {
-        "case_type": "temporal_paradox_subject",
-        "priority": "critical",
-        "subject_id": "OAS2_0036",
-        "session_id": "OAS2_0036_MR5",
-        "risk_score": 0.291405,
-        "temporal_paradox_count": 2,
-        "risk_delta": -0.619968,
-        "reason": "Longitudinal risk dropped beyond the paradox threshold."
-      },
       {
         "case_type": "temporal_paradox_subject",
         "priority": "critical",
@@ -225,6 +650,16 @@
         "risk_score": 0.805616,
         "temporal_paradox_count": 1,
         "risk_delta": 0.269469,
+        "reason": "Longitudinal risk dropped beyond the paradox threshold."
+      },
+      {
+        "case_type": "temporal_paradox_subject",
+        "priority": "critical",
+        "subject_id": "OAS2_0036",
+        "session_id": "OAS2_0036_MR5",
+        "risk_score": 0.291405,
+        "temporal_paradox_count": 2,
+        "risk_delta": -0.619968,
         "reason": "Longitudinal risk dropped beyond the paradox threshold."
       },
       {
@@ -443,8 +878,213 @@
       }
     ]
   },
+  "model_cards": [
+    {
+      "model_id": "oasis1_active",
+      "run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+      "dataset": "oasis1",
+      "status": "active_anchor",
+      "intended_use": "Stable OASIS-first structural MRI research decision-support baseline.",
+      "not_intended_for": "Autonomous diagnosis, medical-use rollout, or non-OASIS disease claims.",
+      "evidence": {
+        "auroc": 0.8793650793650795,
+        "f1": 0.8484848484848485,
+        "specificity": 0.8095238095238095,
+        "review_required_count": 10
+      },
+      "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context."
+    },
+    {
+      "model_id": "oasis2::oasis2_multimodal_v1",
+      "run_name": "oasis2_multimodal_v1",
+      "dataset": "oasis2",
+      "status": "longitudinal_candidate",
+      "intended_use": "Longitudinal OASIS-2 research candidate for progression review and subject-level evidence.",
+      "not_intended_for": "Drop-in OASIS-1 replacement, diagnosis, or medical-use rollout claims.",
+      "evidence": {
+        "auroc": 0.7250293772032903,
+        "balanced_accuracy": 0.6533490011750881,
+        "specificity": 0.5675675675675675,
+        "subject_consensus_auroc": 0.6818181818181818,
+        "review_required_count": 31,
+        "temporal_paradox_count": 4,
+        "handoff_case_count": 20
+      },
+      "promotion_gates": {
+        "test_auroc": 0.8,
+        "balanced_accuracy": 0.75,
+        "specificity": 0.7,
+        "subject_consensus_auroc": 0.78,
+        "temporal_paradox_count_max": 0
+      },
+      "promotion_blockers": [
+        {
+          "metric": "test_auroc",
+          "actual": 0.725029,
+          "target": 0.8,
+          "comparator": ">=",
+          "message": "test_auroc 0.725 does not meet >= 0.800."
+        },
+        {
+          "metric": "balanced_accuracy",
+          "actual": 0.653349,
+          "target": 0.75,
+          "comparator": ">=",
+          "message": "balanced_accuracy 0.653 does not meet >= 0.750."
+        },
+        {
+          "metric": "specificity",
+          "actual": 0.567568,
+          "target": 0.7,
+          "comparator": ">=",
+          "message": "specificity 0.568 does not meet >= 0.700."
+        },
+        {
+          "metric": "subject_consensus_auroc",
+          "actual": 0.681818,
+          "target": 0.78,
+          "comparator": ">=",
+          "message": "subject_consensus_auroc 0.682 does not meet >= 0.780."
+        },
+        {
+          "metric": "temporal_paradox_count",
+          "actual": 4.0,
+          "target": 0,
+          "comparator": "<=",
+          "message": "temporal_paradox_count 4.000 does not meet <= 0.000."
+        }
+      ],
+      "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context."
+    }
+  ],
+  "deployment_readiness": {
+    "generated_at": "2026-05-29T10:15:16.882607+00:00",
+    "artifact_type": "cerebrasense_deployment_readiness",
+    "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context.",
+    "candidate_run_name": "oasis2_multimodal_v1",
+    "readiness_status": "blocked_candidate",
+    "onnx_export_allowed": false,
+    "onnx_export_rule": "Export OASIS-2 to ONNX only after automated promotion gates pass and human review confirms candidate status.",
+    "promotion_blockers": [
+      {
+        "metric": "test_auroc",
+        "actual": 0.725029,
+        "target": 0.8,
+        "comparator": ">=",
+        "message": "test_auroc 0.725 does not meet >= 0.800."
+      },
+      {
+        "metric": "balanced_accuracy",
+        "actual": 0.653349,
+        "target": 0.75,
+        "comparator": ">=",
+        "message": "balanced_accuracy 0.653 does not meet >= 0.750."
+      },
+      {
+        "metric": "specificity",
+        "actual": 0.567568,
+        "target": 0.7,
+        "comparator": ">=",
+        "message": "specificity 0.568 does not meet >= 0.700."
+      },
+      {
+        "metric": "subject_consensus_auroc",
+        "actual": 0.681818,
+        "target": 0.78,
+        "comparator": ">=",
+        "message": "subject_consensus_auroc 0.682 does not meet >= 0.780."
+      },
+      {
+        "metric": "temporal_paradox_count",
+        "actual": 4.0,
+        "target": 0,
+        "comparator": "<=",
+        "message": "temporal_paradox_count 4.000 does not meet <= 0.000."
+      }
+    ],
+    "checkpoint_path": "alz_backend/outputs/runs/oasis2/oasis2_multimodal_v1/checkpoints/best_model.pt",
+    "checkpoint_exists": true,
+    "onnx_path": "alz_backend/outputs/runs/oasis2/oasis2_multimodal_v1/exports/best_model.onnx",
+    "onnx_exists": false,
+    "model_size_mb": 531.73,
+    "benchmark_targets": {
+      "cpu_latency_ms_max": 1500,
+      "gpu_latency_ms_max": 300,
+      "model_size_mb_max": 600
+    },
+    "benchmark_status": "pending_export"
+  },
+  "demo_bundle_actions": {
+    "generated_at": "2026-05-29T10:15:16.889231+00:00",
+    "artifact_type": "cerebrasense_demo_bundle_manifest",
+    "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context.",
+    "actions": [
+      {
+        "id": "stable_oasis1_demo",
+        "label": "Stable OASIS-1 Demo",
+        "status": "ready",
+        "command": "python scripts/build_oasis_demo_bundle.py --bundle-name oasis1_stable_demo",
+        "output_path": "alz_backend/outputs/reports/demo/oasis1_stable_demo"
+      },
+      {
+        "id": "oasis2_candidate_demo",
+        "label": "OASIS-2 Candidate Demo",
+        "status": "ready",
+        "command": "python scripts/build_oasis2_demo_bundle.py --run-name oasis2_multimodal_v1 --bundle-name oasis2_candidate_demo",
+        "output_path": "alz_backend/outputs/reports/demo/oasis2_candidate_demo"
+      },
+      {
+        "id": "review_hard_cases",
+        "label": "Review Hard Cases",
+        "status": "ready",
+        "command": "python scripts/build_next_level_artifacts.py",
+        "output_path": "alz_backend/outputs/reports/next_level/current/review_handoff_pack.md"
+      }
+    ]
+  },
   "handoff_pack_paths": {
     "json": "alz_backend/outputs/reports/next_level/current/review_handoff_pack.json",
     "markdown": "alz_backend/outputs/reports/next_level/current/review_handoff_pack.md"
+  },
+  "control_tower_status": {
+    "status": "candidate_blocked",
+    "label": "Candidate Blocked",
+    "candidate_run_name": "oasis2_multimodal_v1",
+    "active_run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+    "candidate_only": true,
+    "human_review_required": true
+  },
+  "next_best_action": {
+    "id": "run_v3_temporal_consistency",
+    "label": "Run V3 Temporal",
+    "priority": "critical",
+    "reason": "Temporal paradoxes remain above the zero-paradox promotion gate.",
+    "command": "python scripts/train_oasis2.py --config configs/oasis2_train_multimodal_v3_temporal.yaml"
+  },
+  "evidence_health": {
+    "status": "warn",
+    "model_board_entries": 21,
+    "run_registry_status": "pass",
+    "model_card_count": 2,
+    "promotion_blocker_count": 5,
+    "trajectory_review_subject_count": 14,
+    "decision_support_wording_present": true
+  },
+  "deployment_health": {
+    "status": "blocked",
+    "readiness_status": "blocked_candidate",
+    "onnx_export_allowed": false,
+    "benchmark_status": "pending_export",
+    "local_demo_path": "http://127.0.0.1:8000/demo/",
+    "static_demo_path": "http://127.0.0.1:8080/"
+  },
+  "active_vs_candidate_deltas": {
+    "active_run_name": "oasis_baseline_rtx2050_gpu_seed42_split42",
+    "candidate_run_name": "oasis2_multimodal_v1",
+    "auroc_delta": -0.154336,
+    "specificity_delta": -0.241956,
+    "review_required_delta": 21,
+    "subject_consensus_auroc_delta": 0.681818,
+    "decision": "keep_oasis1_active_until_oasis2_gates_pass"
   }
 }

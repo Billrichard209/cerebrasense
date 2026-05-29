@@ -31,6 +31,14 @@ class NextLevelArtifacts:
     progression_cases_csv_path: Path
     handoff_pack_json_path: Path
     handoff_pack_md_path: Path
+    model_cards_json_path: Path
+    model_cards_md_path: Path
+    deployment_readiness_json_path: Path
+    deployment_readiness_md_path: Path
+    demo_bundle_manifest_json_path: Path
+    demo_bundle_manifest_md_path: Path
+    run_registry_json_path: Path
+    run_registry_md_path: Path
     demo_payload_json_path: Path
 
 
@@ -57,6 +65,51 @@ OASIS2_PROMOTION_GATES = {
     "specificity": 0.70,
     "subject_consensus_auroc": 0.78,
     "temporal_paradox_count_max": 0,
+}
+
+OASIS2_EXPERIMENT_LADDER = [
+    {
+        "stage": "v2_specificity",
+        "run_name": "oasis2_multimodal_v2",
+        "config_path": "configs/oasis2_train_multimodal_v2.yaml",
+        "objective": "Improve specificity, balanced accuracy, subject AUROC, review burden, and paradox count without changing the multimodal pipeline.",
+        "promotion_role": "candidate_refresh",
+    },
+    {
+        "stage": "v3_temporal_consistency",
+        "run_name": "oasis2_multimodal_v3_temporal",
+        "config_path": "configs/oasis2_train_multimodal_v3_temporal.yaml",
+        "objective": "Increase temporal consistency pressure and reduce visit-to-visit contradictions.",
+        "promotion_role": "temporal_ablation",
+    },
+    {
+        "stage": "v4_subject_consensus",
+        "run_name": "oasis2_multimodal_v4_subject_consensus",
+        "config_path": "configs/oasis2_train_multimodal_v4_subject_consensus.yaml",
+        "objective": "Optimize subject-level agreement and handoff burden after the temporal candidate stabilizes.",
+        "promotion_role": "subject_consensus_ablation",
+    },
+    {
+        "stage": "multi_seed_confirmation",
+        "run_name": "oasis2_multimodal_reliability_multiseed",
+        "config_path": "run_oasis2_multiseed_eval.cmd",
+        "objective": "Confirm the best candidate is not a lucky seed or split artifact.",
+        "promotion_role": "stability_confirmation",
+    },
+]
+
+OASIS2_REVIEW_THRESHOLDS = {
+    "uncertainty_band_low": 0.40,
+    "uncertainty_band_high": 0.60,
+    "high_risk_review_min": 0.70,
+    "temporal_drop_epsilon": 0.15,
+    "trajectory_score_review_min": 0.55,
+}
+
+DEPLOYMENT_BENCHMARK_TARGETS = {
+    "cpu_latency_ms_max": 1500,
+    "gpu_latency_ms_max": 300,
+    "model_size_mb_max": 600,
 }
 
 
@@ -93,6 +146,13 @@ def _balanced_accuracy_from_entry(entry: dict[str, Any]) -> float:
     if sensitivity == 0.0 and specificity == 0.0:
         return _metric(entry, "balanced_accuracy")
     return (sensitivity + specificity) / 2.0
+
+
+def _round_metric(value: Any, digits: int = 6) -> float:
+    try:
+        return round(float(value or 0.0), digits)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _run_name_from_predictions_path(path: Path | None) -> str | None:
@@ -143,6 +203,39 @@ def _candidate_score(metrics: dict[str, Any]) -> float:
     ) - round(0.15 * review_penalty, 6)
 
 
+def _entry_promotion_gate_status(entry: dict[str, Any]) -> dict[str, Any]:
+    checks = {
+        "test_auroc": entry.get("auroc"),
+        "balanced_accuracy": _balanced_accuracy_from_entry(entry),
+        "specificity": entry.get("specificity"),
+        "subject_consensus_auroc": entry.get("subject_consensus_auroc"),
+    }
+    failures = [
+        {
+            "metric": metric,
+            "actual": _round_metric(actual),
+            "target": target,
+            "comparator": ">=",
+        }
+        for metric, actual, target in [
+            ("test_auroc", checks["test_auroc"], OASIS2_PROMOTION_GATES["test_auroc"]),
+            ("balanced_accuracy", checks["balanced_accuracy"], OASIS2_PROMOTION_GATES["balanced_accuracy"]),
+            ("specificity", checks["specificity"], OASIS2_PROMOTION_GATES["specificity"]),
+            (
+                "subject_consensus_auroc",
+                checks["subject_consensus_auroc"],
+                OASIS2_PROMOTION_GATES["subject_consensus_auroc"],
+            ),
+        ]
+        if _round_metric(actual) < float(target)
+    ]
+    return {
+        "automated_metric_gates_pass": len(failures) == 0,
+        "failures": failures,
+        "promotion_gates": dict(OASIS2_PROMOTION_GATES),
+    }
+
+
 def _entry(
     *,
     model_id: str,
@@ -155,7 +248,7 @@ def _entry(
 ) -> dict[str, Any]:
     sensitivity = _metric(metrics, "sensitivity", _metric(metrics, "recall_sensitivity"))
     specificity = _metric(metrics, "specificity")
-    return {
+    entry = {
         "model_id": model_id,
         "dataset": dataset,
         "run_name": run_name,
@@ -164,6 +257,7 @@ def _entry(
         "threshold": threshold if threshold is not None else metrics.get("threshold"),
         "auroc": _metric(metrics, "auroc"),
         "accuracy": _metric(metrics, "accuracy"),
+        "balanced_accuracy": _metric(metrics, "balanced_accuracy", (sensitivity + specificity) / 2.0),
         "f1": _metric(metrics, "f1"),
         "sensitivity": sensitivity,
         "specificity": specificity,
@@ -174,6 +268,9 @@ def _entry(
         "candidate_score": _candidate_score(metrics),
         "decision_support_only": True,
     }
+    if dataset == "oasis2":
+        entry["promotion_gate_status"] = _entry_promotion_gate_status(entry)
+    return entry
 
 
 def _preferred_oasis2_metrics(run_root: Path) -> tuple[dict[str, Any], Path | None, str]:
@@ -318,6 +415,8 @@ def build_model_board(*, settings: AppSettings | None = None) -> dict[str, Any]:
         "artifact_type": "cerebrasense_model_board",
         "decision_support_note": DECISION_SUPPORT_NOTE,
         "recommendation": recommendation,
+        "promotion_gates": dict(OASIS2_PROMOTION_GATES),
+        "experiment_ladder": list(OASIS2_EXPERIMENT_LADDER),
         "entry_count": len(ranked),
         "entries": ranked,
         "promotion_briefing": {
@@ -327,6 +426,74 @@ def build_model_board(*, settings: AppSettings | None = None) -> dict[str, Any]:
             "frozen_oasis2_baseline_candidate": dict(OASIS2_BASELINE_CANDIDATE),
         },
     }
+
+
+def build_oasis2_run_registry(model_board: dict[str, Any], *, settings: AppSettings | None = None) -> dict[str, Any]:
+    """Build a compact OASIS-2 run registry with ladder coverage and integrity checks."""
+
+    resolved_settings = settings or get_app_settings()
+    entries = [entry for entry in model_board.get("entries", []) if entry.get("dataset") == "oasis2"]
+    run_names = [str(entry.get("run_name", "")) for entry in entries if entry.get("run_name")]
+    duplicate_run_names = sorted({run_name for run_name in run_names if run_names.count(run_name) > 1})
+    ladder_runs = {str(stage["run_name"]): stage for stage in OASIS2_EXPERIMENT_LADDER}
+    ladder_status = []
+    for stage in OASIS2_EXPERIMENT_LADDER:
+        run_name = str(stage["run_name"])
+        matched = next((entry for entry in entries if entry.get("run_name") == run_name), None)
+        config_path = resolved_settings.project_root / str(stage["config_path"])
+        if str(stage["config_path"]).endswith(".cmd"):
+            config_path = resolved_settings.workspace_root / str(stage["config_path"])
+        ladder_status.append(
+            {
+                **stage,
+                "status": "evaluated" if matched else "planned",
+                "config_exists": config_path.exists(),
+                "metrics_path": (
+                    None
+                    if matched is None or not matched.get("metrics_path")
+                    else _portable_path(Path(str(matched["metrics_path"])), resolved_settings.workspace_root)
+                ),
+                "promotion_gate_status": None if matched is None else matched.get("promotion_gate_status"),
+            }
+        )
+    unassigned_runs = sorted(run_name for run_name in run_names if run_name not in ladder_runs)
+    missing_metrics = [entry.get("run_name") for entry in entries if not entry.get("metrics_path")]
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_type": "oasis2_run_registry",
+        "decision_support_note": DECISION_SUPPORT_NOTE,
+        "run_count": len(entries),
+        "unique_run_names": len(duplicate_run_names) == 0,
+        "duplicate_run_names": duplicate_run_names,
+        "missing_metrics_runs": missing_metrics,
+        "unassigned_run_names": unassigned_runs,
+        "experiment_ladder": ladder_status,
+        "entries": entries,
+        "integrity_status": "pass" if not duplicate_run_names and not missing_metrics else "warn",
+    }
+
+
+def _write_run_registry_md(payload: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# OASIS-2 Run Registry",
+        "",
+        payload["decision_support_note"],
+        "",
+        f"- generated_at: {payload['generated_at']}",
+        f"- integrity_status: {payload['integrity_status']}",
+        f"- run_count: {payload['run_count']}",
+        "",
+        "## Experiment Ladder",
+        "",
+        "| Stage | Run | Status | Config |",
+        "|---|---|---|---|",
+    ]
+    for stage in payload.get("experiment_ladder", []):
+        lines.append(
+            f"| {stage['stage']} | {stage['run_name']} | {stage['status']} | "
+            f"{'present' if stage.get('config_exists') else 'missing/planned'} |"
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_model_board_md(payload: dict[str, Any], path: Path) -> None:
@@ -362,6 +529,75 @@ def _write_model_board_md(payload: dict[str, Any], path: Path) -> None:
         ]
     )
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _risk_volatility(scores: list[float]) -> float:
+    if len(scores) < 2:
+        return 0.0
+    mean_score = sum(scores) / len(scores)
+    variance = sum((score - mean_score) ** 2 for score in scores) / len(scores)
+    return round(variance**0.5, 6)
+
+
+def _risk_acceleration(deltas: list[float]) -> float:
+    if len(deltas) < 2:
+        return 0.0
+    return round(deltas[-1] - deltas[0], 6)
+
+
+def _trajectory_reviewer_reasons(
+    *,
+    max_risk: float,
+    risk_delta: float,
+    temporal_paradox_count: int,
+    review_count: int,
+    mixed_label_subject: bool,
+    volatility: float,
+) -> list[str]:
+    reasons: list[str] = []
+    if temporal_paradox_count > 0:
+        reasons.append("temporal paradox")
+    if mixed_label_subject:
+        reasons.append("mixed longitudinal labels")
+    if review_count > 0:
+        reasons.append("low-confidence or review-flagged visits")
+    if max_risk >= OASIS2_REVIEW_THRESHOLDS["high_risk_review_min"]:
+        reasons.append("high maximum risk")
+    if risk_delta >= 0.10:
+        reasons.append("rising risk trajectory")
+    if volatility >= 0.12:
+        reasons.append("volatile visit-to-visit risk")
+    return reasons or ["routine longitudinal tracking"]
+
+
+def _trajectory_score(
+    *,
+    max_risk: float,
+    risk_delta: float,
+    acceleration: float,
+    volatility: float,
+    temporal_paradox_count: int,
+    review_count: int,
+    mixed_label_subject: bool,
+) -> float:
+    score = (
+        (0.30 * max_risk)
+        + (0.18 * max(risk_delta, 0.0))
+        + (0.14 * max(acceleration, 0.0))
+        + (0.14 * min(volatility, 1.0))
+        + (0.12 * min(temporal_paradox_count, 3) / 3.0)
+        + (0.07 * min(review_count, 3) / 3.0)
+        + (0.05 if mixed_label_subject else 0.0)
+    )
+    return round(min(score, 1.0), 6)
+
+
+def _trajectory_status(score: float, reasons: list[str]) -> str:
+    if "temporal paradox" in reasons or score >= 0.70:
+        return "review_required"
+    if score >= OASIS2_REVIEW_THRESHOLDS["trajectory_score_review_min"] or "rising risk trajectory" in reasons:
+        return "progression_watch"
+    return "stable_watch"
 
 
 def build_oasis2_progression_panel(
@@ -404,9 +640,31 @@ def build_oasis2_progression_panel(
         scores = [float(value) for value in pd.to_numeric(work[score_col], errors="coerce").fillna(0.0).tolist()]
         labels = [int(value) for value in pd.to_numeric(work["true_label"], errors="coerce").dropna().tolist()]
         deltas = [round(scores[index] - scores[index - 1], 6) for index in range(1, len(scores))]
+        risk_delta = round(scores[-1] - scores[0], 6) if len(scores) >= 2 else 0.0
+        volatility = _risk_volatility(scores)
+        acceleration = _risk_acceleration(deltas)
         subject_paradoxes = sum(1 for delta in deltas if delta <= -abs(temporal_drop_epsilon))
         temporal_paradox_count += subject_paradoxes
         review_count = int(work.get("review_flag", pd.Series(dtype=object)).astype(str).str.lower().isin({"true", "1", "yes"}).sum())
+        mixed_label_subject = len(set(labels)) > 1
+        max_risk = max(scores) if scores else 0.0
+        reviewer_reasons = _trajectory_reviewer_reasons(
+            max_risk=max_risk,
+            risk_delta=risk_delta,
+            temporal_paradox_count=subject_paradoxes,
+            review_count=review_count,
+            mixed_label_subject=mixed_label_subject,
+            volatility=volatility,
+        )
+        trajectory_score = _trajectory_score(
+            max_risk=max_risk,
+            risk_delta=risk_delta,
+            acceleration=acceleration,
+            volatility=volatility,
+            temporal_paradox_count=subject_paradoxes,
+            review_count=review_count,
+            mixed_label_subject=mixed_label_subject,
+        )
         rows.append(
             {
                 "subject_id": subject_id,
@@ -415,18 +673,31 @@ def build_oasis2_progression_panel(
                 "last_session": str(work[session_col].iloc[-1]),
                 "first_risk": scores[0] if scores else None,
                 "last_risk": scores[-1] if scores else None,
-                "max_risk": max(scores) if scores else None,
-                "risk_delta": round(scores[-1] - scores[0], 6) if len(scores) >= 2 else 0.0,
+                "max_risk": max_risk,
+                "risk_delta": risk_delta,
+                "max_visit_delta": max(deltas, key=abs) if deltas else 0.0,
+                "risk_acceleration": acceleration,
+                "risk_volatility": volatility,
+                "visit_deltas": deltas,
                 "temporal_paradox_count": subject_paradoxes,
-                "mixed_label_subject": len(set(labels)) > 1,
+                "mixed_label_subject": mixed_label_subject,
                 "review_required_count": review_count,
-                "high_priority": bool(subject_paradoxes > 0 or review_count > 0 or (scores and max(scores) >= 0.7)),
+                "trajectory_score": trajectory_score,
+                "trajectory_status": _trajectory_status(trajectory_score, reviewer_reasons),
+                "reviewer_reasons": reviewer_reasons,
+                "evidence_summary": (
+                    f"{len(work)} visits; risk {scores[0]:.3f}->{scores[-1]:.3f}; "
+                    f"delta {risk_delta:.3f}; max {max_risk:.3f}."
+                    if scores
+                    else "No valid risk scores."
+                ),
+                "high_priority": bool(subject_paradoxes > 0 or review_count > 0 or (scores and max_risk >= 0.7)),
             }
         )
 
     case_frame = pd.DataFrame(rows).sort_values(
-        ["high_priority", "temporal_paradox_count", "max_risk"],
-        ascending=[False, False, False],
+        ["high_priority", "trajectory_score", "temporal_paradox_count", "max_risk"],
+        ascending=[False, False, False, False],
         kind="stable",
     )
     payload = {
@@ -439,6 +710,10 @@ def build_oasis2_progression_panel(
         "temporal_paradox_count": int(temporal_paradox_count),
         "mixed_label_subject_count": int(case_frame["mixed_label_subject"].sum()) if not case_frame.empty else 0,
         "high_priority_subject_count": int(case_frame["high_priority"].sum()) if not case_frame.empty else 0,
+        "trajectory_review_subject_count": (
+            int(case_frame["trajectory_status"].isin({"review_required", "progression_watch"}).sum()) if not case_frame.empty else 0
+        ),
+        "trajectory_score_review_min": OASIS2_REVIEW_THRESHOLDS["trajectory_score_review_min"],
         "top_subjects": case_frame.head(10).to_dict(orient="records"),
     }
     return payload, case_frame
@@ -455,18 +730,19 @@ def _write_progression_md(payload: dict[str, Any], path: Path) -> None:
         f"- temporal_paradox_count: {payload.get('temporal_paradox_count', 0)}",
         f"- mixed_label_subject_count: {payload.get('mixed_label_subject_count', 0)}",
         f"- high_priority_subject_count: {payload.get('high_priority_subject_count', 0)}",
+        f"- trajectory_review_subject_count: {payload.get('trajectory_review_subject_count', 0)}",
         "",
         "## Top Subjects",
         "",
-        "| Subject | Sessions | First Risk | Last Risk | Delta | Paradoxes | Review |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Subject | Sessions | First Risk | Last Risk | Delta | Score | Status | Reason |",
+        "|---|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in payload.get("top_subjects", []):
         lines.append(
             f"| {row['subject_id']} | {row['session_count']} | "
             f"{float(row.get('first_risk') or 0.0):.3f} | {float(row.get('last_risk') or 0.0):.3f} | "
-            f"{float(row.get('risk_delta') or 0.0):.3f} | {row['temporal_paradox_count']} | "
-            f"{row['review_required_count']} |"
+            f"{float(row.get('risk_delta') or 0.0):.3f} | {float(row.get('trajectory_score') or 0.0):.3f} | "
+            f"{row.get('trajectory_status', 'track')} | {', '.join(row.get('reviewer_reasons', []))} |"
         )
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -660,25 +936,38 @@ def build_reviewer_handoff_pack(
         temporal_subjects = temporal_subjects[:max_cases_per_bucket]
 
     queue = (temporal_subjects + false_negatives + false_positives + low_confidence_cases + mixed_label_subjects)[:20]
+    category_counts = {
+        "temporal_paradox_subjects": len(temporal_subjects),
+        "false_positives": len(false_positives),
+        "false_negatives": len(false_negatives),
+        "low_confidence_cases": len(low_confidence_cases),
+        "mixed_label_subjects": len(mixed_label_subjects),
+    }
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "artifact_type": "oasis2_reviewer_handoff_pack",
         "decision_support_note": DECISION_SUPPORT_NOTE,
         "candidate_run_name": _run_name_from_predictions_path(predictions_csv_path),
         "source_predictions_csv": None if predictions_csv_path is None else str(predictions_csv_path),
-        "category_counts": {
-            "temporal_paradox_subjects": len(temporal_subjects),
-            "false_positives": len(false_positives),
-            "false_negatives": len(false_negatives),
-            "low_confidence_cases": len(low_confidence_cases),
-            "mixed_label_subjects": len(mixed_label_subjects),
-        },
+        "category_counts": category_counts,
         "categories": {
             "temporal_paradox_subjects": temporal_subjects,
             "false_positives": false_positives,
             "false_negatives": false_negatives,
             "low_confidence_cases": low_confidence_cases,
             "mixed_label_subjects": mixed_label_subjects,
+        },
+        "error_learning_loop": {
+            "taxonomy": list(category_counts.keys()),
+            "counts": category_counts,
+            "review_thresholds": dict(OASIS2_REVIEW_THRESHOLDS),
+            "next_actions": [
+                "Review false negatives first because missed positive labels carry the highest research risk.",
+                "Audit temporal paradox subjects before any threshold or promotion decision.",
+                "Use low-confidence cases to tune review thresholds without relabeling source data silently.",
+                "Track mixed-label subjects separately from session-level errors.",
+            ],
+            "decision_policy": "Use reviewer outcomes to update thresholds and candidate notes only; do not overwrite source labels.",
         },
         "review_queue": {
             "total_case_count": len(queue),
@@ -719,11 +1008,222 @@ def _write_handoff_pack_md(payload: dict[str, Any], path: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def build_model_cards(
+    model_board: dict[str, Any],
+    progression: dict[str, Any],
+    handoff_pack: dict[str, Any],
+) -> dict[str, Any]:
+    """Create concise model cards for the active OASIS-1 anchor and OASIS-2 candidate."""
+
+    entries = model_board.get("entries", [])
+    active = next((entry for entry in entries if entry.get("model_id") == "oasis1_active"), {})
+    candidate = next((entry for entry in entries if entry.get("dataset") == "oasis2"), {})
+    blockers = _build_promotion_blockers(candidate, progression)
+    cards: list[dict[str, Any]] = []
+    if active:
+        cards.append(
+            {
+                "model_id": active.get("model_id"),
+                "run_name": active.get("run_name"),
+                "dataset": "oasis1",
+                "status": "active_anchor",
+                "intended_use": "Stable OASIS-first structural MRI research decision-support baseline.",
+                "not_intended_for": "Autonomous diagnosis, medical-use rollout, or non-OASIS disease claims.",
+                "evidence": {
+                    "auroc": active.get("auroc"),
+                    "f1": active.get("f1"),
+                    "specificity": active.get("specificity"),
+                    "review_required_count": active.get("review_required_count"),
+                },
+                "decision_support_note": DECISION_SUPPORT_NOTE,
+            }
+        )
+    if candidate:
+        cards.append(
+            {
+                "model_id": candidate.get("model_id"),
+                "run_name": candidate.get("run_name"),
+                "dataset": "oasis2",
+                "status": "longitudinal_candidate",
+                "intended_use": "Longitudinal OASIS-2 research candidate for progression review and subject-level evidence.",
+                "not_intended_for": "Drop-in OASIS-1 replacement, diagnosis, or medical-use rollout claims.",
+                "evidence": {
+                    "auroc": candidate.get("auroc"),
+                    "balanced_accuracy": _balanced_accuracy_from_entry(candidate),
+                    "specificity": candidate.get("specificity"),
+                    "subject_consensus_auroc": candidate.get("subject_consensus_auroc"),
+                    "review_required_count": candidate.get("review_required_count"),
+                    "temporal_paradox_count": progression.get("temporal_paradox_count", 0),
+                    "handoff_case_count": handoff_pack.get("review_queue", {}).get("total_case_count", 0),
+                },
+                "promotion_gates": dict(OASIS2_PROMOTION_GATES),
+                "promotion_blockers": blockers,
+                "decision_support_note": DECISION_SUPPORT_NOTE,
+            }
+        )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_type": "cerebrasense_model_cards",
+        "decision_support_note": DECISION_SUPPORT_NOTE,
+        "card_count": len(cards),
+        "cards": cards,
+    }
+
+
+def _write_model_cards_md(payload: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# CerebraSense Model Cards",
+        "",
+        payload["decision_support_note"],
+        "",
+    ]
+    for card in payload.get("cards", []):
+        evidence = card.get("evidence", {})
+        lines.extend(
+            [
+                f"## {card.get('run_name')}",
+                "",
+                f"- dataset: {card.get('dataset')}",
+                f"- status: {card.get('status')}",
+                f"- intended_use: {card.get('intended_use')}",
+                f"- not_intended_for: {card.get('not_intended_for')}",
+                f"- AUROC: {float(evidence.get('auroc') or 0.0):.3f}",
+                f"- specificity: {float(evidence.get('specificity') or 0.0):.3f}",
+                f"- review_required_count: {evidence.get('review_required_count')}",
+                "",
+            ]
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def build_deployment_readiness(
+    model_board: dict[str, Any],
+    progression: dict[str, Any],
+    *,
+    settings: AppSettings | None = None,
+) -> dict[str, Any]:
+    """Summarize ONNX/export readiness without promoting a candidate prematurely."""
+
+    resolved_settings = settings or get_app_settings()
+    entries = model_board.get("entries", [])
+    candidate = next((entry for entry in entries if entry.get("dataset") == "oasis2"), {})
+    blockers = _build_promotion_blockers(candidate, progression)
+    run_name = candidate.get("run_name")
+    run_root = resolved_settings.outputs_root / "runs" / "oasis2" / str(run_name) if run_name else None
+    checkpoint_path = run_root / "checkpoints" / "best_model.pt" if run_root else None
+    onnx_path = run_root / "exports" / "best_model.onnx" if run_root else None
+    model_size_mb = (
+        round(checkpoint_path.stat().st_size / (1024 * 1024), 3)
+        if checkpoint_path is not None and checkpoint_path.exists()
+        else None
+    )
+    onnx_export_allowed = bool(candidate) and not blockers
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_type": "cerebrasense_deployment_readiness",
+        "decision_support_note": DECISION_SUPPORT_NOTE,
+        "candidate_run_name": run_name,
+        "readiness_status": "export_ready_after_review" if onnx_export_allowed else "blocked_candidate",
+        "onnx_export_allowed": onnx_export_allowed,
+        "onnx_export_rule": "Export OASIS-2 to ONNX only after automated promotion gates pass and human review confirms candidate status.",
+        "promotion_blockers": blockers,
+        "checkpoint_path": None if checkpoint_path is None else _portable_path(checkpoint_path, resolved_settings.workspace_root),
+        "checkpoint_exists": bool(checkpoint_path is not None and checkpoint_path.exists()),
+        "onnx_path": None if onnx_path is None else _portable_path(onnx_path, resolved_settings.workspace_root),
+        "onnx_exists": bool(onnx_path is not None and onnx_path.exists()),
+        "model_size_mb": model_size_mb,
+        "benchmark_targets": dict(DEPLOYMENT_BENCHMARK_TARGETS),
+        "benchmark_status": "pending_export" if not onnx_export_allowed else "run_latency_benchmark_before_demo_claims",
+    }
+
+
+def _write_deployment_readiness_md(payload: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# CerebraSense Deployment Readiness",
+        "",
+        payload["decision_support_note"],
+        "",
+        f"- candidate_run_name: {payload.get('candidate_run_name')}",
+        f"- readiness_status: {payload.get('readiness_status')}",
+        f"- onnx_export_allowed: {payload.get('onnx_export_allowed')}",
+        f"- checkpoint_exists: {payload.get('checkpoint_exists')}",
+        f"- onnx_exists: {payload.get('onnx_exists')}",
+        f"- benchmark_status: {payload.get('benchmark_status')}",
+        "",
+        "## Export Rule",
+        "",
+        payload["onnx_export_rule"],
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def build_demo_bundle_manifest(
+    model_board: dict[str, Any],
+    handoff_pack: dict[str, Any],
+    *,
+    settings: AppSettings | None = None,
+) -> dict[str, Any]:
+    """Describe one-click demo bundle actions without changing runtime state."""
+
+    resolved_settings = settings or get_app_settings()
+    entries = model_board.get("entries", [])
+    active = next((entry for entry in entries if entry.get("model_id") == "oasis1_active"), {})
+    candidate = next((entry for entry in entries if entry.get("dataset") == "oasis2"), {})
+    candidate_run_name = candidate.get("run_name") or "oasis2_multimodal_v1"
+    actions = [
+        {
+            "id": "stable_oasis1_demo",
+            "label": "Stable OASIS-1 Demo",
+            "status": "ready" if active else "missing_active_model",
+            "command": "python scripts/build_oasis_demo_bundle.py --bundle-name oasis1_stable_demo",
+            "output_path": _portable_path(resolved_settings.outputs_root / "reports" / "demo" / "oasis1_stable_demo", resolved_settings.workspace_root),
+        },
+        {
+            "id": "oasis2_candidate_demo",
+            "label": "OASIS-2 Candidate Demo",
+            "status": "ready" if candidate else "missing_candidate",
+            "command": f"python scripts/build_oasis2_demo_bundle.py --run-name {candidate_run_name} --bundle-name oasis2_candidate_demo",
+            "output_path": _portable_path(resolved_settings.outputs_root / "reports" / "demo" / "oasis2_candidate_demo", resolved_settings.workspace_root),
+        },
+        {
+            "id": "review_hard_cases",
+            "label": "Review Hard Cases",
+            "status": "ready" if handoff_pack.get("review_queue", {}).get("total_case_count", 0) else "no_cases",
+            "command": "python scripts/build_next_level_artifacts.py",
+            "output_path": _portable_path(resolved_settings.outputs_root / "reports" / "next_level" / "current" / "review_handoff_pack.md", resolved_settings.workspace_root),
+        },
+    ]
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_type": "cerebrasense_demo_bundle_manifest",
+        "decision_support_note": DECISION_SUPPORT_NOTE,
+        "actions": actions,
+    }
+
+
+def _write_demo_bundle_manifest_md(payload: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# CerebraSense Demo Bundle Actions",
+        "",
+        payload["decision_support_note"],
+        "",
+        "| Action | Status | Command |",
+        "|---|---|---|",
+    ]
+    for action in payload.get("actions", []):
+        lines.append(f"| {action['label']} | {action['status']} | `{action['command']}` |")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def build_frontend_research_payload(
     model_board: dict[str, Any],
     progression: dict[str, Any],
     handoff_pack: dict[str, Any] | None = None,
     handoff_pack_paths: dict[str, str] | None = None,
+    model_cards: dict[str, Any] | None = None,
+    deployment_readiness: dict[str, Any] | None = None,
+    demo_bundle_manifest: dict[str, Any] | None = None,
+    run_registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create the compact JSON contract consumed by the frontend demo."""
 
@@ -733,6 +1233,10 @@ def build_frontend_research_payload(
     blockers = _build_promotion_blockers(best_oasis2, progression)
     candidate_status = _build_candidate_status(best_oasis2, blockers)
     handoff = handoff_pack or {}
+    cards = model_cards or {}
+    readiness = deployment_readiness or {}
+    demo_manifest = demo_bundle_manifest or {}
+    registry = run_registry or {}
     paradox_summary = {
         "temporal_paradox_count": progression.get("temporal_paradox_count", 0),
         "temporal_paradox_epsilon": progression.get("temporal_paradox_epsilon"),
@@ -743,6 +1247,19 @@ def build_frontend_research_payload(
             if int(subject.get("temporal_paradox_count") or 0) > 0
         ][:5],
     }
+    top_model_summaries = [
+        {
+            "dataset": entry.get("dataset"),
+            "run_name": entry.get("run_name"),
+            "role": entry.get("role"),
+            "auroc": entry.get("auroc"),
+            "balanced_accuracy": _balanced_accuracy_from_entry(entry),
+            "specificity": entry.get("specificity"),
+            "review_required_count": entry.get("review_required_count"),
+            "subject_consensus_auroc": entry.get("subject_consensus_auroc"),
+        }
+        for entry in model_board.get("entries", [])[:5]
+    ]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "mode": "research",
@@ -753,6 +1270,8 @@ def build_frontend_research_payload(
             "dataset": best.get("dataset"),
             "auroc": best.get("auroc"),
             "f1": best.get("f1"),
+            "specificity": best.get("specificity"),
+            "balanced_accuracy": _balanced_accuracy_from_entry(best) if best else None,
             "review_required_count": best.get("review_required_count"),
         },
         "oasis2_candidate": {
@@ -766,16 +1285,53 @@ def build_frontend_research_payload(
             "subject_consensus_auroc": best_oasis2.get("subject_consensus_auroc"),
             "recommendation": model_board.get("recommendation"),
         },
+        "active_vs_candidate": {
+            "active_run_name": best.get("run_name"),
+            "candidate_run_name": best_oasis2.get("run_name"),
+            "auroc_delta": (
+                round(float(best_oasis2.get("auroc") or 0.0) - float(best.get("auroc") or 0.0), 6)
+                if best and best_oasis2
+                else None
+            ),
+            "specificity_delta": (
+                round(float(best_oasis2.get("specificity") or 0.0) - float(best.get("specificity") or 0.0), 6)
+                if best and best_oasis2
+                else None
+            ),
+            "decision": "keep_oasis1_active_until_oasis2_gates_pass",
+        },
+        "model_board_summary": {
+            "entry_count": model_board.get("entry_count", 0),
+            "recommendation": model_board.get("recommendation"),
+            "top_models": top_model_summaries,
+        },
         "candidate_status": candidate_status,
         "promotion_blockers": blockers,
+        "experiment_ladder": registry.get("experiment_ladder", model_board.get("experiment_ladder", [])),
+        "run_registry": {
+            "integrity_status": registry.get("integrity_status"),
+            "run_count": registry.get("run_count", 0),
+            "unique_run_names": registry.get("unique_run_names", True),
+        },
         "progression": {
             "subject_count": progression.get("subject_count", 0),
             "temporal_paradox_count": progression.get("temporal_paradox_count", 0),
             "high_priority_subject_count": progression.get("high_priority_subject_count", 0),
+            "trajectory_review_subject_count": progression.get("trajectory_review_subject_count", 0),
+            "trajectory_score_review_min": progression.get("trajectory_score_review_min"),
+            "top_subjects": progression.get("top_subjects", [])[:5],
+        },
+        "trajectory_intelligence": {
+            "review_subject_count": progression.get("trajectory_review_subject_count", 0),
+            "score_review_min": progression.get("trajectory_score_review_min"),
             "top_subjects": progression.get("top_subjects", [])[:5],
         },
         "paradox_summary": paradox_summary,
+        "error_learning_loop": handoff.get("error_learning_loop", {}),
         "review_queue": handoff.get("review_queue", {"total_case_count": 0, "cases": []}),
+        "model_cards": cards.get("cards", []),
+        "deployment_readiness": readiness,
+        "demo_bundle_actions": demo_manifest,
         "handoff_pack_paths": handoff_pack_paths or {},
     }
 
@@ -793,15 +1349,24 @@ def build_next_level_artifacts(
         output_root or resolved_settings.outputs_root / "reports" / "next_level" / "current"
     )
     model_board = build_model_board(settings=resolved_settings)
+    run_registry = build_oasis2_run_registry(model_board, settings=resolved_settings)
     progression, case_frame = build_oasis2_progression_panel(settings=resolved_settings)
 
     board_json = resolved_output_root / "model_board.json"
     board_md = resolved_output_root / "model_board.md"
+    run_registry_json = resolved_output_root / "oasis2_run_registry.json"
+    run_registry_md = resolved_output_root / "oasis2_run_registry.md"
     progression_json = resolved_output_root / "oasis2_progression_panel.json"
     progression_md = resolved_output_root / "oasis2_progression_panel.md"
     progression_csv = resolved_output_root / "oasis2_progression_cases.csv"
     handoff_json = resolved_output_root / "review_handoff_pack.json"
     handoff_md = resolved_output_root / "review_handoff_pack.md"
+    model_cards_json = resolved_output_root / "model_cards.json"
+    model_cards_md = resolved_output_root / "model_cards.md"
+    deployment_readiness_json = resolved_output_root / "deployment_readiness.json"
+    deployment_readiness_md = resolved_output_root / "deployment_readiness.md"
+    demo_bundle_manifest_json = resolved_output_root / "demo_bundle_manifest.json"
+    demo_bundle_manifest_md = resolved_output_root / "demo_bundle_manifest.md"
     demo_json = frontend_payload_path or resolved_output_root / "research_mode_payload.json"
     handoff_payload = build_reviewer_handoff_pack(
         predictions_csv_path=Path(str(progression["predictions_csv_path"])) if progression.get("predictions_csv_path") else None,
@@ -809,6 +1374,9 @@ def build_next_level_artifacts(
         case_frame=case_frame,
         settings=resolved_settings,
     )
+    model_cards = build_model_cards(model_board, progression, handoff_payload)
+    deployment_readiness = build_deployment_readiness(model_board, progression, settings=resolved_settings)
+    demo_bundle_manifest = build_demo_bundle_manifest(model_board, handoff_payload, settings=resolved_settings)
     demo_payload = build_frontend_research_payload(
         model_board,
         progression,
@@ -817,15 +1385,27 @@ def build_next_level_artifacts(
             "json": _portable_path(handoff_json, resolved_settings.workspace_root),
             "markdown": _portable_path(handoff_md, resolved_settings.workspace_root),
         },
+        model_cards=model_cards,
+        deployment_readiness=deployment_readiness,
+        demo_bundle_manifest=demo_bundle_manifest,
+        run_registry=run_registry,
     )
 
     board_json.write_text(json.dumps(model_board, indent=2), encoding="utf-8")
     _write_model_board_md(model_board, board_md)
+    run_registry_json.write_text(json.dumps(run_registry, indent=2), encoding="utf-8")
+    _write_run_registry_md(run_registry, run_registry_md)
     progression_json.write_text(json.dumps(progression, indent=2), encoding="utf-8")
     _write_progression_md(progression, progression_md)
     case_frame.to_csv(progression_csv, index=False)
     handoff_json.write_text(json.dumps(handoff_payload, indent=2), encoding="utf-8")
     _write_handoff_pack_md(handoff_payload, handoff_md)
+    model_cards_json.write_text(json.dumps(model_cards, indent=2), encoding="utf-8")
+    _write_model_cards_md(model_cards, model_cards_md)
+    deployment_readiness_json.write_text(json.dumps(deployment_readiness, indent=2), encoding="utf-8")
+    _write_deployment_readiness_md(deployment_readiness, deployment_readiness_md)
+    demo_bundle_manifest_json.write_text(json.dumps(demo_bundle_manifest, indent=2), encoding="utf-8")
+    _write_demo_bundle_manifest_md(demo_bundle_manifest, demo_bundle_manifest_md)
     ensure_directory(demo_json.parent)
     demo_json.write_text(json.dumps(demo_payload, indent=2), encoding="utf-8")
 
@@ -833,10 +1413,18 @@ def build_next_level_artifacts(
         output_root=resolved_output_root,
         model_board_json_path=board_json,
         model_board_md_path=board_md,
+        run_registry_json_path=run_registry_json,
+        run_registry_md_path=run_registry_md,
         progression_json_path=progression_json,
         progression_md_path=progression_md,
         progression_cases_csv_path=progression_csv,
         handoff_pack_json_path=handoff_json,
         handoff_pack_md_path=handoff_md,
+        model_cards_json_path=model_cards_json,
+        model_cards_md_path=model_cards_md,
+        deployment_readiness_json_path=deployment_readiness_json,
+        deployment_readiness_md_path=deployment_readiness_md,
+        demo_bundle_manifest_json_path=demo_bundle_manifest_json,
+        demo_bundle_manifest_md_path=demo_bundle_manifest_md,
         demo_payload_json_path=demo_json,
     )

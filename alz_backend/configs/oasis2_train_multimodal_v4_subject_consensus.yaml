@@ -1,0 +1,67 @@
+# Subject-consensus OASIS-2 multimodal recipe.
+#
+# Goals for v4:
+# - preserve the v2/v3 multimodal ResNet pipeline
+# - optimize subject-level agreement and reduce review burden
+# - keep OASIS-1 as active fallback until strict OASIS-2 promotion gates pass
+
+run_name: oasis2_multimodal_v4_subject_consensus
+epochs: 60
+device: auto
+mixed_precision: true
+deterministic: true
+dry_run: false
+
+model:
+  architecture: resnet50_multimodal
+
+model_config_path: configs/oasis2_multimodal_model.yaml
+
+data:
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  num_workers: 2
+  cache_rate: 0.0
+  image_size: [96, 96, 96]
+  seed: 42
+  split_seed: 42
+  train_fraction: 0.7
+  val_fraction: 0.15
+  test_fraction: 0.15
+  weighted_sampling: true
+  training_cohort: full
+  max_train_batches:
+  max_val_batches:
+
+optimizer:
+  name: adamw
+  learning_rate: 0.00007
+  weight_decay: 0.015
+  momentum: 0.9
+
+scheduler:
+  name: cosine
+  step_size: 30
+  gamma: 0.5
+  patience: 5
+  factor: 0.5
+
+loss:
+  name: focal_loss
+  class_weights: [1.0, 1.0]
+  focal_gamma: 0.8
+  temporal_lambda: 0.2
+  temporal_lambda_warmup_epochs: 8
+
+early_stopping:
+  enabled: true
+  patience: 15
+  min_delta: 0.001
+  monitor: val_auroc
+  mode: max
+
+checkpoint:
+  resume_from:
+  init_from_checkpoint:
+  save_best: true
+  save_last: true
