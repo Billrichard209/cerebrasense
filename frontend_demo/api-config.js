@@ -1,5 +1,12 @@
-/** API base URL for CerebraSense frontend demo (served at /demo/ via FastAPI). */
-window.CEREBRASENSE_API_BASE = window.CEREBRASENSE_API_BASE || "";
+/** API base URL for CerebraSense frontend demo. */
+function inferCerebraSenseApiBase() {
+  if (window.CEREBRASENSE_API_BASE) return window.CEREBRASENSE_API_BASE;
+  const isLocal = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+  const isStaticFrontend = isLocal && window.location.port && window.location.port !== "8000";
+  return isStaticFrontend ? "http://127.0.0.1:8000" : "";
+}
+
+window.CEREBRASENSE_API_BASE = inferCerebraSenseApiBase();
 window.CEREBRASENSE_API_KEY = window.CEREBRASENSE_API_KEY || "";
 
 function cerebraSenseApiHeaders(extraHeaders = {}) {

@@ -975,3 +975,15 @@ def test_dashboard_data_route_remains_public_when_api_key_is_configured(monkeypa
 
     assert response.status_code == 200
     assert response.json() == {"subjects": []}
+
+
+def test_static_frontend_origin_can_read_dashboard_data(monkeypatch) -> None:
+    """The localhost static demo should be allowed to fetch backend data."""
+
+    monkeypatch.setattr("src.api.routers.dashboard.build_dashboard_payload", lambda: {"subjects": []})
+    client = TestClient(create_app())
+
+    response = client.get("/dashboard/data", headers={"Origin": "http://127.0.0.1:8080"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8080"

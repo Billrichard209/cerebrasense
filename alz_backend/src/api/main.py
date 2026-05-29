@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.storage import connect_backend_storage
@@ -34,6 +35,20 @@ def create_app() -> FastAPI:
             "OASIS-first structural MRI decision-support backend for inference, "
             "explainability, volumetrics, and longitudinal workflows."
         ),
+    )
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:8080",
+            "http://localhost:8080",
+            "http://127.0.0.1:5500",
+            "http://localhost:5500",
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+        ],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
     )
     application.include_router(system.router)
     application.include_router(governance.router)
