@@ -25,73 +25,172 @@ const state = {
 // Helper constants
 const CIRCUMFERENCE = 2 * Math.PI * 24; // ~150.796 for circular progress rings (radius = 24)
 
-// â”€â”€ 3. Application Entry & Router Initialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function runSafeStep(label, fn) {
+  try {
+    return fn();
+  } catch (error) {
+    console.error(`CerebraSense ${label} failed`, error);
+    return null;
+  }
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function toNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getActivePatient() {
+  if (state.activePatient && patients[state.activePatient]) {
+    return patients[state.activePatient];
+  }
+  const firstId = Object.keys(patients)[0];
+  if (!firstId) return null;
+  state.activePatient = firstId;
+  return patients[firstId];
+}
+
+function updatePatientSelectorLabel() {
+  const label = document.querySelector("#patientSelector span");
+  if (label && state.activePatient) {
+    label.textContent = `Patient: ${state.activePatient}`;
+  }
+}
+
+function mapDashboardSubject(subject) {
+  const subjectId = subject.subject_id || subject.id || "OASIS_DEMO";
+  const visits = Array.isArray(subject.visits) && subject.visits.length ? subject.visits : ["Baseline"];
+  const rawScores = Array.isArray(subject.raw_scores) && subject.raw_scores.length ? subject.raw_scores : [subject.final_risk ?? 0.5];
+  const finalRisk = toNumber(subject.final_risk ?? rawScores[rawScores.length - 1], 0.5);
+  const hippoMm3 = toNumber(subject.biomarkers?.hippo_vol_mm3, 3200);
+  const tivMm3 = toNumber(subject.biomarkers?.tiv_mm3, 1450000);
+  const mmse = toNumber(subject.clinical?.mmse, 27);
+  const trendStatus = subject.trend_status || "Stable";
+  const clinicalSummary = subject.clinical_summary || "Research decision-support summary unavailable.";
+
+  return {
+    name: subjectId,
+    age: subject.clinical?.age || 70,
+    gender: subject.clinical?.sex || "F",
+    scanner: "Standardized Pipeline",
+    sequence: "T1w MPRAGE",
+    voxelSize: "1.0 x 1.0 x 1.0 mm3",
+    matrixSize: "256 x 256 x 96",
+    acquisitionDate: new Date().toISOString().split("T")[0],
+    risk: finalRisk,
+    hippocampalVolume: hippoMm3 / 1000,
+    completeness: 100,
+    confidence: toNumber(subject.confidence, 90),
+    mmse,
+    trend: visits.map((visitId, index) => {
+      const score = toNumber(rawScores[index] ?? rawScores[rawScores.length - 1], finalRisk);
+      return {
+        visit: index + 1,
+        date: visitId,
+        risk: score,
+        hippo: (hippoMm3 / 1000) - ((finalRisk - score) * 0.5),
+        mmse
+      };
+    }),
+    features: [
+      {
+        name: "Overall Risk Contribution",
+        impact: Math.round(finalRisk * 100),
+        trend: trendStatus === "Progressing" || trendStatus === "Escalating" ? "up" : "neutral",
+        desc: clinicalSummary
+      },
+      {
+        name: "Velocity Score",
+        impact: Math.min(100, Math.round(Math.abs(toNumber(subject.velocity?.[0], 0)) * 1000)),
+        trend: trendStatus === "Progressing" || trendStatus === "Escalating" ? "up" : "neutral",
+        desc: `Rate of change: ${toNumber(subject.velocity?.[0], 0)}`
+      }
+    ],
+    regions: [
+      {
+        name: "Hippocampus",
+        volume: `${(hippoMm3 / 1000).toFixed(2)} cm3`,
+        status: subject.status === "High Risk" ? "critical" : "normal",
+        pct: "Measured via T1w"
+      },
+      {
+        name: "TIV",
+        volume: `${(tivMm3 / 1000).toFixed(0)} cm3`,
+        status: "normal",
+        pct: "Total Intracranial Vol"
+      }
+    ],
+    recommendations: clinicalSummary,
+    findings: [
+      { severity: subject.status === "High Risk" ? "high" : "low", text: `Patient status: ${subject.status || "Track"}` },
+      { severity: subject.is_rapid_decline ? "high" : "low", text: `Trend status: ${trendStatus}` }
+    ]
+  };
+}
+
+async function loadDashboardData() {
+  try {
+    const data = await fetchDashboardData();
+    const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
+    patients = {};
+    subjects.forEach(subject => {
+      const mapped = mapDashboardSubject(subject);
+      patients[mapped.name] = mapped;
+    });
+    state.activePatient = Object.keys(patients)[0] || null;
+    updatePatientSelectorLabel();
+  } catch (err) {
+    console.error("Failed to load dashboard data.", err);
+  }
+}
+
+function renderNoDashboardData() {
+  setText("pageTitle", "Workspace - No Data Available (Please run backend MLOps)");
+  setText("riskValue", "--");
+  setText("hippoValue", "--");
+  setText("dataValue", "--");
+  setText("confValue", "--");
+}
+
+// ── 3. Application Entry & Router Initialization ──────────────
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const data = await fetchDashboardData();
-    if (data && data.subjects && data.subjects.length > 0) {
+    if (data && Array.isArray(data.subjects) && data.subjects.length > 0) {
       patients = {};
       data.subjects.forEach(subject => {
-        // Map backend schema to frontend schema
-        patients[subject.subject_id] = {
-          name: subject.subject_id,
-          age: subject.clinical?.age || 70,
-          gender: subject.clinical?.sex || 'F',
-          scanner: 'Standardized Pipeline',
-          sequence: 'T1w MPRAGE',
-          voxelSize: '1.0 Ã— 1.0 Ã— 1.0 mmÂ³',
-          matrixSize: '256 Ã— 256 Ã— 96',
-          acquisitionDate: new Date().toISOString().split('T')[0],
-          risk: subject.final_risk,
-          hippocampalVolume: (subject.biomarkers?.hippo_vol_mm3 || 3200) / 1000, // cmÂ³
-          completeness: 100,
-          confidence: 90,
-          mmse: subject.clinical?.mmse || 27,
-          trend: subject.visits.map((v, i) => ({
-            visit: i + 1,
-            date: v, // meta_session_id
-            risk: subject.raw_scores[i],
-            hippo: ((subject.biomarkers?.hippo_vol_mm3 || 3200) / 1000) - ((subject.final_risk - subject.raw_scores[i]) * 0.5), // estimated hippo trend
-            mmse: subject.clinical?.mmse || 27
-          })),
-          features: [
-            { name: "Overall Risk Contribution", impact: Math.round(subject.final_risk * 100), trend: subject.trend_status === 'Progressing' ? 'up' : 'neutral', desc: subject.clinical_summary || 'Clinical summary not available.' },
-            { name: "Velocity Score", impact: Math.min(100, Math.round(Math.abs(subject.velocity[0] || 0) * 1000)), trend: subject.trend_status === 'Progressing' ? 'up' : 'neutral', desc: `Rate of change: ${subject.velocity[0] || 0}` }
-          ],
-          regions: [
-            { name: 'Hippocampus', volume: `${((subject.biomarkers?.hippo_vol_mm3 || 3200)/1000).toFixed(2)} cmÂ³`, status: subject.status === 'High Risk' ? 'critical' : 'normal', pct: 'Measured via T1w' },
-            { name: 'TIV', volume: `${((subject.biomarkers?.tiv_mm3 || 1450000)/1000).toFixed(0)} cmÂ³`, status: 'normal', pct: 'Total Intracranial Vol' }
-          ],
-          recommendations: subject.clinical_summary,
-          findings: [
-            { severity: subject.status === 'High Risk' ? 'high' : 'low', text: `Patient status: ${subject.status}` },
-            { severity: subject.is_rapid_decline ? 'high' : 'low', text: `Trend status: ${subject.trend_status}` }
-          ]
-        };
+        // Use the robust mapDashboardSubject() which has null/undefined guards on all fields
+        const mapped = mapDashboardSubject(subject);
+        patients[mapped.name] = mapped;
       });
       // Set active patient to first subject returned
-      state.activePatient = Object.keys(patients)[0];
+      state.activePatient = Object.keys(patients)[0] || null;
+      updatePatientSelectorLabel();
     } else {
-      console.warn("No subjects returned from backend.");
+      console.warn("No subjects returned from backend; will show empty state.");
     }
   } catch (err) {
     console.error("Failed to load dashboard data. Ensure backend is running and prediction CSVs are loaded.", err);
   }
 
   // Always initialize UI, even if empty, so the user sees something
-  initRouter();
-  initPatientDropdown();
-  initScanExplorer();
-  initLongitudinalControls();
-  initAnalysisSimulation();
-  initReportExport();
-  initResearchModeBridge();
+  runSafeStep("router init", initRouter);
+  runSafeStep("patient dropdown init", initPatientDropdown);
+  runSafeStep("scan explorer init", initScanExplorer);
+  runSafeStep("longitudinal controls init", initLongitudinalControls);
+  runSafeStep("analysis init", initAnalysisSimulation);
+  runSafeStep("report export init", initReportExport);
+  runSafeStep("research bridge init", () => initResearchModeBridge());
 
   // Perform first render cycle if patient data exists
   if (Object.keys(patients).length > 0) {
-    triggerFullRender();
+    runSafeStep("initial render", triggerFullRender);
   } else {
-    document.getElementById("pageTitle").textContent = "Workspace - No Data Available (Please run backend MLOps)";
+    renderNoDashboardData();
   }
 });
 
@@ -110,15 +209,17 @@ function initRouter() {
   const sidebar = document.getElementById("sidebar");
   const menuBtn = document.getElementById("menuBtn");
 
-  menuBtn.addEventListener("click", () => {
-    sidebar.classList.add("open");
-    overlay.classList.add("open");
-  });
+  if (menuBtn && sidebar && overlay) {
+    menuBtn.addEventListener("click", () => {
+      sidebar.classList.add("open");
+      overlay.classList.add("open");
+    });
 
-  overlay.addEventListener("click", () => {
-    sidebar.classList.remove("open");
-    overlay.classList.remove("open");
-  });
+    overlay.addEventListener("click", () => {
+      sidebar.classList.remove("open");
+      overlay.classList.remove("open");
+    });
+  }
 
   // Global keyboard listener for navigation
   document.addEventListener("keydown", (e) => {
@@ -168,7 +269,7 @@ function switchPage(pageId) {
     'explainability': 'Clinical Explainability & Feature Attributions',
     'reports': 'AI-Assisted Clinical Decision Report'
   };
-  document.getElementById("pageTitle").textContent = titles[pageId] || 'Workspace';
+  setText("pageTitle", titles[pageId] || 'Workspace');
 
   // Redraw canvases depending on the active page
   if (pageId === 'overview') {
@@ -182,13 +283,16 @@ function switchPage(pageId) {
   }
 
   // Close sidebar drawer if open on mobile view
-  document.getElementById("sidebar").classList.remove("open");
-  document.getElementById("sidebarOverlay").classList.remove("open");
+  document.getElementById("sidebar")?.classList.remove("open");
+  document.getElementById("sidebarOverlay")?.classList.remove("open");
 }
 
 // â”€â”€ 4. Patient Selector Custom Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initPatientDropdown() {
   const patientBtn = document.getElementById("patientSelector");
+  if (!patientBtn) return;
+  patientBtn.querySelector(".patient-dropdown-menu")?.remove();
+  updatePatientSelectorLabel();
 
   // Create beautiful glass dropdown list element
   const dropdown = document.createElement("div");
@@ -230,16 +334,17 @@ function initPatientDropdown() {
 }
 
 function selectPatient(id) {
+  if (!patients[id]) return;
   state.activePatient = id;
 
   // Update dropdown checked active state
   document.querySelectorAll(".patient-dropdown-item").forEach(item => {
-    const isTarget = item.querySelector("strong").textContent.includes(id);
+    const isTarget = item.querySelector("strong")?.textContent.includes(id);
     item.classList.toggle("active", isTarget);
   });
 
   // Update Patient Selector Text
-  document.querySelector("#patientSelector span").textContent = `Patient: ${id}`;
+  updatePatientSelectorLabel();
 
   // Redraw all components
   triggerFullRender();
@@ -272,25 +377,36 @@ function animateKPIValue(elId, start, end, formatFn) {
 }
 
 function updateKPIGauges(patient) {
+  if (!patient) return;
+  const risk = toNumber(patient.risk, 0);
+  const hippo = toNumber(patient.hippocampalVolume, 0);
+  const completeness = toNumber(patient.completeness, 0);
+  const confidence = toNumber(patient.confidence, 0);
+
+  setText("riskValue", risk.toFixed(2));
+  setText("hippoValue", `${hippo.toFixed(1)} cm3`);
+  setText("dataValue", `${Math.round(completeness)}%`);
+  setText("confValue", `${Math.round(confidence)}%`);
+
   // Update Risk Gauge
   const riskCircle = document.querySelector('circle[data-gauge="risk"]');
   if (riskCircle) {
     riskCircle.style.strokeDasharray = CIRCUMFERENCE;
-    const offset = CIRCUMFERENCE - (patient.risk * CIRCUMFERENCE);
+    const offset = CIRCUMFERENCE - (risk * CIRCUMFERENCE);
     riskCircle.style.strokeDashoffset = offset;
 
     // Scale container badge opacity color index
     const parentCard = riskCircle.closest(".kpi");
-    if (parentCard) parentCard.setAttribute("data-gauge-pct", Math.round(patient.risk * 100));
+    if (parentCard) parentCard.setAttribute("data-gauge-pct", Math.round(risk * 100));
   }
-  animateKPIValue("riskValue", 0, patient.risk, v => v.toFixed(2));
+  animateKPIValue("riskValue", 0, risk, v => v.toFixed(2));
 
   // Update Hippocampal Vol Gauge
   const hippoCircle = document.querySelector('circle[data-gauge="hippo"]');
   if (hippoCircle) {
     hippoCircle.style.strokeDasharray = CIRCUMFERENCE;
     // Normalize: healthy volume range is ~4.0 to ~8.0 cmÂ³
-    const pct = Math.max(10, Math.min(98, ((patient.hippocampalVolume - 4) / 4) * 100));
+    const pct = Math.max(10, Math.min(98, ((hippo - 4) / 4) * 100));
     hippoCircle.style.strokeDashoffset = CIRCUMFERENCE - (pct / 100 * CIRCUMFERENCE);
 
     const parentCard = hippoCircle.closest(".kpi");
@@ -302,17 +418,17 @@ function updateKPIGauges(patient) {
   const dataCircle = document.querySelector('circle[data-gauge="data"]');
   if (dataCircle) {
     dataCircle.style.strokeDasharray = CIRCUMFERENCE;
-    dataCircle.style.strokeDashoffset = CIRCUMFERENCE - (patient.completeness / 100 * CIRCUMFERENCE);
+    dataCircle.style.strokeDashoffset = CIRCUMFERENCE - (completeness / 100 * CIRCUMFERENCE);
   }
-  animateKPIValue("dataValue", 0, patient.completeness, v => `${Math.round(v)}%`);
+  animateKPIValue("dataValue", 0, completeness, v => `${Math.round(v)}%`);
 
   // Update Model Confidence Gauge
   const confCircle = document.querySelector('circle[data-gauge="conf"]');
   if (confCircle) {
     confCircle.style.strokeDasharray = CIRCUMFERENCE;
-    confCircle.style.strokeDashoffset = CIRCUMFERENCE - (patient.confidence / 100 * CIRCUMFERENCE);
+    confCircle.style.strokeDashoffset = CIRCUMFERENCE - (confidence / 100 * CIRCUMFERENCE);
   }
-  animateKPIValue("confValue", 0, patient.confidence, v => `${Math.round(v)}%`);
+  animateKPIValue("confValue", 0, confidence, v => `${Math.round(v)}%`);
 }
 
 // â”€â”€ 6. Longitudinal Risk Chart (Interactive Canvas) â”€â”€â”€â”€â”€â”€
@@ -320,9 +436,11 @@ function renderTrendChart() {
   const canvas = document.getElementById("trendChart");
   if (!canvas || state.activePage !== 'overview') return;
 
-  const patient = patients[state.activePatient];
+  const patient = getActivePatient();
+  if (!patient || !Array.isArray(patient.trend) || patient.trend.length === 0) return;
   // Filter the visits count
   const visits = patient.trend.slice(0, state.activeVisitsCount);
+  if (visits.length < 2) return;
 
   // Setup HDPI Scaling
   const dpr = window.devicePixelRatio || 1;
@@ -699,7 +817,8 @@ function renderMRIPlane(plane, sliceIndex) {
   ctx.fillRect(0, 0, width, height);
 
   // Get active patient details to adjust brain structure shapes (e.g. atrophic ventricles enlargement)
-  const patient = patients[state.activePatient];
+  const patient = getActivePatient();
+  if (!patient) return;
   const isHighRisk = patient.risk > 0.6;
   const ventricleEnlargeFactor = isHighRisk ? 1.6 : 0.8;
   const hippocampusAtrophyFactor = isHighRisk ? 0.6 : 1.0;
@@ -1060,7 +1179,8 @@ function populateMetricsTable() {
   const tableBody = document.querySelector("#metricsTable tbody");
   if (!tableBody) return;
 
-  const patient = patients[state.activePatient];
+  const patient = getActivePatient();
+  if (!patient || !Array.isArray(patient.trend)) return;
   const visits = patient.trend.slice(0, state.activeVisitsCount);
 
   tableBody.innerHTML = "";
@@ -1196,7 +1316,8 @@ function renderLongitudinalChart() {
   const canvas = document.getElementById("longChart");
   if (!canvas || state.activePage !== 'longitudinal') return;
 
-  const patient = patients[state.activePatient];
+  const patient = getActivePatient();
+  if (!patient || !Array.isArray(patient.trend) || patient.trend.length < 2) return;
   const visits = patient.trend.slice(0, state.activeVisitsCount);
 
   // Setup HDPI scaling
@@ -1765,29 +1886,34 @@ function renderResearchMode() {
 }
 
 function triggerFullRender() {
-  const patient = patients[state.activePatient];
+  const patient = getActivePatient();
+  if (!patient) {
+    renderNoDashboardData();
+    return;
+  }
+  updatePatientSelectorLabel();
 
   // 1. Update Top level KPI cards
-  updateKPIGauges(patient);
+  runSafeStep("KPI render", () => updateKPIGauges(patient));
 
   // 2. Redraw Overview trend line canvas
-  renderTrendChart();
+  runSafeStep("overview trend render", renderTrendChart);
 
   // 3. Render features attributions
-  renderExplainability(patient);
+  runSafeStep("explainability render", () => renderExplainability(patient));
 
   // 4. Update Longitudinal page data and grid table
-  populateMetricsTable();
-  renderLongitudinalChart();
+  runSafeStep("metrics table render", populateMetricsTable);
+  runSafeStep("longitudinal chart render", renderLongitudinalChart);
 
   // 5. Build Reports Page details
-  renderClinicalReport(patient);
+  runSafeStep("clinical report render", () => renderClinicalReport(patient));
 
   // 6. Render generated model-board payload if present
-  renderResearchMode();
+  runSafeStep("research mode render", renderResearchMode);
 
   // 7. Draw scan explorer canvases (if active)
   if (state.activePage === 'scan-explorer') {
-    renderAllMRIPlanes();
+    runSafeStep("MRI planes render", renderAllMRIPlanes);
   }
 }

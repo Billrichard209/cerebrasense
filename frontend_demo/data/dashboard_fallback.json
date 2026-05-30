@@ -1,0 +1,84 @@
+{
+  "source": "packaged_frontend_demo_fallback",
+  "subjects": [
+    {
+      "subject_id": "OAS2_0104",
+      "visits": ["OAS2_0104_MR1", "OAS2_0104_MR2"],
+      "raw_scores": [0.9999, 1.0],
+      "smoothed_scores": [0.9999, 1.0],
+      "comparison_scores": [0.0, 0.0],
+      "velocity": [0.0001],
+      "trend_status": "Stable",
+      "is_rapid_decline": false,
+      "final_risk": 1.0,
+      "status": "High Risk",
+      "num_visits": 2,
+      "biomarkers": {
+        "hippo_vol_mm3": 3300.0,
+        "tiv_mm3": 1450000.0,
+        "normalized_ratio": 0.002276
+      },
+      "clinical_summary": "Packaged demo payload for local frontend testing. Research decision-support only; not diagnosis.",
+      "clinical": {
+        "age": "70",
+        "sex": "Female",
+        "mmse": "27"
+      }
+    },
+    {
+      "subject_id": "OAS2_0140",
+      "visits": ["OAS2_0140_MR1", "OAS2_0140_MR2", "OAS2_0140_MR3"],
+      "raw_scores": [0.4768, 0.9602, 0.995],
+      "smoothed_scores": [0.4768, 0.6701, 0.8001],
+      "comparison_scores": [0.0001, 0.0003, 0.0001],
+      "velocity": [0.1933, 0.13],
+      "trend_status": "Stabilizing",
+      "is_rapid_decline": false,
+      "final_risk": 0.8001,
+      "status": "High Risk",
+      "num_visits": 3,
+      "biomarkers": {
+        "hippo_vol_mm3": 3280.01,
+        "tiv_mm3": 1450000.0,
+        "normalized_ratio": 0.002262
+      },
+      "clinical_summary": "Packaged demo payload for local frontend testing. Longitudinal evidence requires reviewer confirmation.",
+      "clinical": {
+        "age": "70",
+        "sex": "Female",
+        "mmse": "27"
+      }
+    },
+    {
+      "subject_id": "OAS2_0048",
+      "visits": ["OAS2_0048_MR1", "OAS2_0048_MR2", "OAS2_0048_MR3", "OAS2_0048_MR4", "OAS2_0048_MR5"],
+      "raw_scores": [0.3769, 0.378, 0.588, 0.5605, 0.7057],
+      "smoothed_scores": [0.3769, 0.3774, 0.4616, 0.5012, 0.583],
+      "comparison_scores": [0.0047, 0.3691, 0.1904, 0.4201, 0.0037],
+      "velocity": [0.0005, 0.0842, 0.0396, 0.0818],
+      "trend_status": "Escalating",
+      "is_rapid_decline": false,
+      "final_risk": 0.583,
+      "status": "Low Risk",
+      "num_visits": 5,
+      "biomarkers": {
+        "hippo_vol_mm3": 3258.3,
+        "tiv_mm3": 1450000.0,
+        "normalized_ratio": 0.002247
+      },
+      "clinical_summary": "Packaged demo payload for local frontend testing. Borderline longitudinal signal; keep as research support only.",
+      "clinical": {
+        "age": "70",
+        "sex": "Female",
+        "mmse": "27"
+      }
+    }
+  ],
+  "summary": {
+    "total_subjects": 3,
+    "high_risk_count": 2,
+    "rapid_decline_count": 0,
+    "runs_loaded": ["Packaged fallback"],
+    "primary_run": "OASIS-2 demo fallback"
+  }
+}

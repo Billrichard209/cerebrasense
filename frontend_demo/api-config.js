@@ -1,4 +1,7 @@
 /** API base URL for CerebraSense frontend demo. */
+const CEREBRASENSE_DASHBOARD_TIMEOUT_MS = 3500;
+const CEREBRASENSE_DASHBOARD_FALLBACK = "./data/dashboard_fallback.json";
+
 function inferCerebraSenseApiBase() {
   if (window.CEREBRASENSE_API_BASE) return window.CEREBRASENSE_API_BASE;
   const isLocal = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
@@ -17,14 +20,34 @@ function cerebraSenseApiHeaders(extraHeaders = {}) {
   return headers;
 }
 
-async function fetchDashboardData() {
-  const response = await fetch(`${window.CEREBRASENSE_API_BASE}/dashboard/data`, {
-    headers: cerebraSenseApiHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error(`Dashboard API failed: ${response.status}`);
+async function fetchWithTimeout(url, options = {}, timeoutMs = CEREBRASENSE_DASHBOARD_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return response.json();
+}
+
+async function fetchDashboardData() {
+  const liveUrl = `${window.CEREBRASENSE_API_BASE}/dashboard/data`;
+  try {
+    const response = await fetchWithTimeout(liveUrl, {
+      headers: cerebraSenseApiHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Dashboard API failed: ${response.status}`);
+    }
+    return response.json();
+  } catch (liveError) {
+    console.warn("Live dashboard API unavailable; trying packaged demo payload.", liveError);
+    const fallback = await fetch(CEREBRASENSE_DASHBOARD_FALLBACK, { cache: "no-store" });
+    if (!fallback.ok) {
+      throw liveError;
+    }
+    return fallback.json();
+  }
 }
 
 async function fetchOasis2LongitudinalDashboard(runName) {
