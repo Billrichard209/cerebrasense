@@ -24,6 +24,8 @@ OASIS2_REPO_DEMOGRAPHICS_RELATIVE_PATH = (
     Path("data") / "metadata" / "oasis2" / "oasis2_official_demographics.csv"
 )
 
+
+print("train_oasis2_colab: loading training modules", flush=True)
 from scripts.train_oasis2 import apply_cli_overrides, build_parser as build_train_parser  # noqa: E402
 from src.configs.runtime import get_app_settings  # noqa: E402
 from src.data.oasis2 import build_oasis2_session_manifest  # noqa: E402
@@ -46,6 +48,7 @@ from src.data.oasis2_upload_bundle import (  # noqa: E402
 )
 from src.training.oasis2_research import default_oasis2_train_config_path, run_research_oasis2_training  # noqa: E402
 from src.training.oasis_research import ResearchTrainingError, load_research_oasis_training_config  # noqa: E402
+print("train_oasis2_colab: training modules loaded", flush=True)
 
 
 def _log_progress(message: str) -> None:

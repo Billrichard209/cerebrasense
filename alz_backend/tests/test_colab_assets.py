@@ -34,6 +34,11 @@ def test_oasis2_v3_temporal_colab_notebook_is_run_ready() -> None:
     assert "oasis2_multimodal_v3_temporal" in cell_sources
     assert "configs/oasis2_train_multimodal_v3_temporal.yaml" in cell_sources
     assert "train_oasis2_colab.py" in cell_sources
+    assert "LOG_ROOT = RUNTIME_ROOT / 'logs' / RUN_NAME" in cell_sources
+    assert "subprocess.Popen" in cell_sources
+    assert "stderr=subprocess.STDOUT" in cell_sources
+    assert "train-script-import-smoke" in cell_sources
+    assert "PYTHON, '-u', 'scripts/train_oasis2_colab.py'" in cell_sources
     assert "evaluate_oasis2_candidate.py" in cell_sources
     assert "audit_temporal_paradoxes.py" in cell_sources
     assert "build_oasis2_leaderboard.py" in cell_sources
