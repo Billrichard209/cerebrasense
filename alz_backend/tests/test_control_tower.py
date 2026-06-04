@@ -168,6 +168,21 @@ def test_next_best_action_rules_are_ordered() -> None:
     assert (
         build_next_best_action(
             {
+                "oasis2_candidate": {"run_name": "oasis2_multimodal_v1", "review_required_count": 31},
+                "promotion_blockers": [{"metric": "specificity"}],
+                "progression": {"temporal_paradox_count": 0},
+                "review_queue": {"total_case_count": 31},
+                "failed_ablations": [{"run_name": "oasis2_multimodal_v3_temporal", "status": "failed_ablation"}],
+                "next_candidate_run_name": "oasis2_multimodal_v3b_temporal_light",
+                "deployment_readiness": {"onnx_export_allowed": False},
+            }
+        )["id"]
+        == "run_v3b_temporal_light"
+    )
+
+    assert (
+        build_next_best_action(
+            {
                 "oasis2_candidate": {
                     "run_name": "oasis2_v4",
                     "review_required_count": 4,
@@ -217,6 +232,8 @@ def test_control_tower_gates_pass_marks_export_review_ready_not_promoted() -> No
     assert payload["control_tower_status"]["status"] == "promotion_review_ready"
     assert payload["control_tower_status"]["candidate_only"] is True
     assert payload["next_best_action"]["id"] == "prepare_onnx_export_review"
+    assert "failed_ablations" in payload
+    assert "candidate_comparison" in payload
     assert "auto" not in json.dumps(payload["control_tower_status"]).lower()
 
 

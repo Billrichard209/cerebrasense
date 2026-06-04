@@ -11,8 +11,12 @@ from src.configs.runtime import AppSettings
 from src.evaluation.next_level import (
     DECISION_SUPPORT_NOTE,
     OASIS2_EXPERIMENT_LADDER,
+    OASIS2_NEXT_CANDIDATE_RUN_NAME,
+    build_candidate_comparison_report,
+    build_frontend_research_payload,
     build_deployment_readiness,
     build_demo_bundle_manifest,
+    build_failed_ablations,
     build_model_board,
     build_model_cards,
     build_next_level_artifacts,
@@ -141,6 +145,26 @@ def _seed_evidence(settings: AppSettings) -> Path:
     return predictions_path
 
 
+def _write_oasis2_run(
+    settings: AppSettings,
+    *,
+    run_name: str,
+    metrics: dict,
+    rows: list[dict],
+) -> None:
+    eval_root = (
+        settings.outputs_root
+        / "runs"
+        / "oasis2"
+        / run_name
+        / "evaluation"
+        / "post_train_test_best_model"
+    )
+    eval_root.mkdir(parents=True, exist_ok=True)
+    _write_json(eval_root / "metrics.json", metrics)
+    pd.DataFrame(rows).to_csv(eval_root / "predictions.csv", index=False)
+
+
 def test_model_board_ranks_oasis_tracks_and_keeps_disclaimer(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     _seed_evidence(settings)
@@ -157,6 +181,64 @@ def test_model_board_ranks_oasis_tracks_and_keeps_disclaimer(tmp_path: Path) -> 
     assert board["entries"][0]["run_name"] == "oasis_baseline"
     assert board["promotion_gates"]["test_auroc"] == 0.80
     assert board["experiment_ladder"][0]["stage"] == "v2_specificity"
+
+
+def test_model_board_marks_v3_failed_ablation_and_points_to_v3b(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    _seed_evidence(settings)
+    _write_oasis2_run(
+        settings,
+        run_name="oasis2_multimodal_v1",
+        metrics={
+            "auroc": 0.7250293772032903,
+            "balanced_accuracy": 0.6533490011750881,
+            "f1": 0.607143,
+            "sensitivity": 0.73913,
+            "specificity": 0.567568,
+            "review_required_count": 31,
+            "sample_count": 60,
+            "subject_consensus": {"auroc": 0.6818181818181818},
+        },
+        rows=[
+            {"true_label": 0, "predicted_label": 1, "probability_class_1": 0.55, "confidence_level": "low"},
+            {"true_label": 1, "predicted_label": 1, "probability_class_1": 0.72, "confidence_level": "high"},
+        ],
+    )
+    _write_oasis2_run(
+        settings,
+        run_name="oasis2_multimodal_v3_temporal",
+        metrics={
+            "auroc": 0.5593419506462984,
+            "balanced_accuracy": 0.5346650998824912,
+            "f1": 0.542857,
+            "sensitivity": 0.826087,
+            "specificity": 0.243243,
+            "review_required_count": 58,
+            "sample_count": 60,
+            "subject_consensus": {"auroc": 0.5833333333333334},
+        },
+        rows=[
+            {"true_label": 0, "predicted_label": 1, "probability_class_1": 0.48, "confidence_level": "low"},
+            {"true_label": 1, "predicted_label": 0, "probability_class_1": 0.33, "confidence_level": "low"},
+            {"true_label": 0, "predicted_label": 1, "probability_class_1": 0.44, "confidence_level": "medium"},
+        ],
+    )
+
+    board = build_model_board(settings=settings)
+    failed = build_failed_ablations(board)
+    comparison = build_candidate_comparison_report(board)
+    payload = build_frontend_research_payload(board, {"temporal_paradox_count": 0})
+
+    assert board["next_candidate_run_name"] == OASIS2_NEXT_CANDIDATE_RUN_NAME
+    assert failed[0]["run_name"] == "oasis2_multimodal_v3_temporal"
+    assert failed[0]["status"] == "failed_ablation"
+    assert comparison["status"] == "v3_failed_ablation"
+    assert comparison["failure_mode"] == "model_discrimination_collapse"
+    assert comparison["metric_deltas"]["auroc_delta"] < -0.1
+    assert comparison["hard_case_counts"]["comparison"]["false_positive_count"] == 2
+    assert payload["failed_ablations"][0]["status"] == "failed_ablation"
+    assert payload["next_candidate_run_name"] == OASIS2_NEXT_CANDIDATE_RUN_NAME
+    assert payload["candidate_comparison"]["next_candidate_run_name"] == OASIS2_NEXT_CANDIDATE_RUN_NAME
 
 
 def test_oasis2_run_registry_tracks_ladder_and_integrity(tmp_path: Path) -> None:
@@ -266,11 +348,16 @@ def test_next_level_bundle_writes_frontend_payload(tmp_path: Path) -> None:
     assert artifacts.deployment_readiness_md_path.exists()
     assert artifacts.demo_bundle_manifest_json_path.exists()
     assert artifacts.demo_bundle_manifest_md_path.exists()
+    assert artifacts.candidate_comparison_json_path.exists()
+    assert artifacts.candidate_comparison_md_path.exists()
     assert artifacts.demo_payload_json_path == frontend_payload
     payload = json.loads(frontend_payload.read_text(encoding="utf-8"))
     assert payload["decision_support_note"] == DECISION_SUPPORT_NOTE
     assert payload["oasis2_candidate"]["run_name"] == "oasis2_unit"
     assert payload["candidate_status"]["status"] == "candidate_only"
+    assert payload["next_candidate_run_name"] == OASIS2_NEXT_CANDIDATE_RUN_NAME
+    assert "failed_ablations" in payload
+    assert "candidate_comparison" in payload
     assert {blocker["metric"] for blocker in payload["promotion_blockers"]} >= {
         "test_auroc",
         "temporal_paradox_count",

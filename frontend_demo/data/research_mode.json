@@ -948,13 +948,6 @@
     "candidate_only": true,
     "human_review_required": true
   },
-  "next_best_action": {
-    "id": "review_hard_cases",
-    "label": "Review Hard Cases",
-    "priority": "high",
-    "reason": "Review burden is still above the OASIS-2 v2 acceptance target.",
-    "command": "python scripts/build_cerebrasense_control_tower.py"
-  },
   "evidence_health": {
     "status": "warn",
     "model_board_entries": 4,
@@ -980,5 +973,74 @@
     "review_required_delta": 8,
     "subject_consensus_auroc_delta": 0.681818,
     "decision": "keep_oasis1_active_until_oasis2_gates_pass"
+  },
+  "failed_ablations": [
+    {
+      "run_name": "oasis2_multimodal_v3_temporal",
+      "status": "failed_ablation",
+      "reason": "Temporal consistency improved to zero paradoxes, but discrimination fell below the current OASIS-2 baseline.",
+      "auroc": 0.5593419506462984,
+      "baseline_auroc": 0.7250293772032903,
+      "auroc_delta": -0.165687,
+      "balanced_accuracy": 0.5346650998824912,
+      "specificity": 0.24324324324324328,
+      "subject_consensus_auroc": 0.5833333333333334,
+      "review_required_count": 58,
+      "temporal_paradox_count": 0,
+      "next_candidate_run_name": "oasis2_multimodal_v3b_temporal_light"
+    }
+  ],
+  "candidate_comparison": {
+    "artifact_type": "oasis2_candidate_comparison",
+    "decision_support_note": "Research decision-support only. These artifacts are not diagnosis, not a medical device, and must be reviewed with source imaging and clinical context.",
+    "status": "v3_failed_ablation",
+    "baseline_run_name": "oasis2_multimodal_v1",
+    "comparison_run_name": "oasis2_multimodal_v3_temporal",
+    "next_candidate_run_name": "oasis2_multimodal_v3b_temporal_light",
+    "failure_mode": "model_collapse_or_overregularization",
+    "recommendation": "Run V3b with lighter temporal regularization; do not promote V3.",
+    "metric_deltas": {
+      "auroc_delta": -0.165687,
+      "balanced_accuracy_delta": -0.118684,
+      "specificity_delta": -0.324324,
+      "subject_consensus_auroc_delta": -0.098485,
+      "review_required_delta": 27,
+      "temporal_paradox_delta": -4
+    },
+    "baseline": {
+      "auroc": 0.7250293772032903,
+      "balanced_accuracy": 0.6533490011750881,
+      "specificity": 0.5675675675675675,
+      "subject_consensus_auroc": 0.6818181818181818,
+      "review_required_count": 31,
+      "temporal_paradox_count": 4
+    },
+    "comparison": {
+      "auroc": 0.5593419506462984,
+      "balanced_accuracy": 0.5346650998824912,
+      "specificity": 0.24324324324324328,
+      "subject_consensus_auroc": 0.5833333333333334,
+      "review_required_count": 58,
+      "temporal_paradox_count": 0
+    },
+    "hard_case_counts": {
+      "baseline": {
+        "available": false,
+        "reason": "Local V1 predictions are not bundled in the frontend payload."
+      },
+      "comparison": {
+        "available": false,
+        "reason": "Local V3 predictions are available in the evaluated Drive export."
+      }
+    }
+  },
+  "next_candidate_run_name": "oasis2_multimodal_v3b_temporal_light",
+  "next_best_action": {
+    "id": "run_v3b_temporal_light",
+    "label": "Run V3b Light",
+    "priority": "critical",
+    "reason": "V3 reached temporal consistency but failed discrimination; run the lighter temporal recovery recipe.",
+    "command": "python scripts/train_oasis2.py --config configs/oasis2_train_multimodal_v3b_temporal_light.yaml",
+    "run_name": "oasis2_multimodal_v3b_temporal_light"
   }
 }

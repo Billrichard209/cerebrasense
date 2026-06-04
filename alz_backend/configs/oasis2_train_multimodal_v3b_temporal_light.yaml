@@ -1,0 +1,67 @@
+# Light temporal-consistency OASIS-2 multimodal recovery recipe.
+#
+# Goals for v3b:
+# - preserve the v2/v3 multimodal ResNet pipeline
+# - keep temporal paradox pressure without collapsing held-out discrimination
+# - keep OASIS-2 as a longitudinal candidate until promotion gates pass
+
+run_name: oasis2_multimodal_v3b_temporal_light
+epochs: 55
+device: auto
+mixed_precision: true
+deterministic: true
+dry_run: false
+
+model:
+  architecture: resnet50_multimodal
+
+model_config_path: configs/oasis2_multimodal_model.yaml
+
+data:
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  num_workers: 2
+  cache_rate: 0.0
+  image_size: [96, 96, 96]
+  seed: 42
+  split_seed: 42
+  train_fraction: 0.7
+  val_fraction: 0.15
+  test_fraction: 0.15
+  weighted_sampling: true
+  training_cohort: full
+  max_train_batches:
+  max_val_batches:
+
+optimizer:
+  name: adamw
+  learning_rate: 0.00009
+  weight_decay: 0.01
+  momentum: 0.9
+
+scheduler:
+  name: cosine
+  step_size: 30
+  gamma: 0.5
+  patience: 5
+  factor: 0.5
+
+loss:
+  name: focal_loss
+  class_weights: [1.05, 1.0]
+  focal_gamma: 1.0
+  temporal_lambda: 0.06
+  temporal_lambda_warmup_epochs: 12
+
+early_stopping:
+  enabled: true
+  patience: 14
+  min_delta: 0.001
+  monitor: val_auroc
+  mode: max
+
+checkpoint:
+  resume_from:
+  init_from_checkpoint:
+  save_best: true
+  save_last: true

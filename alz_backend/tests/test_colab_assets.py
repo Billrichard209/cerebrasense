@@ -47,3 +47,22 @@ def test_oasis2_v3_temporal_colab_notebook_is_run_ready() -> None:
     assert "make_archive" in cell_sources
     assert "export_onnx.py" not in cell_sources
     assert "Billrichard209/cerebrasense.git" not in cell_sources
+
+
+def test_oasis2_v3b_light_temporal_colab_notebook_is_run_ready() -> None:
+    """The V3b Colab notebook should run the light temporal recovery recipe."""
+
+    notebook_path = Path(__file__).resolve().parents[2] / "oasis2_v3b_temporal_light_colab.ipynb"
+    assert notebook_path.exists()
+
+    payload = json.loads(notebook_path.read_text(encoding="utf-8-sig"))
+    cell_sources = "\n".join("".join(cell.get("source", [])) for cell in payload["cells"])
+
+    assert "oasis2_multimodal_v3b_temporal_light" in cell_sources
+    assert "configs/oasis2_train_multimodal_v3b_temporal_light.yaml" in cell_sources
+    assert "train-v3b-temporal-light" in cell_sources
+    assert "train_oasis2_colab.py" in cell_sources
+    assert "evaluate_oasis2_candidate.py" in cell_sources
+    assert "build_cerebrasense_control_tower.py" in cell_sources
+    assert "make_archive" in cell_sources
+    assert "export_onnx.py" not in cell_sources

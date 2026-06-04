@@ -67,15 +67,28 @@ def test_oasis2_multimodal_v2_config_keeps_reliability_pipeline() -> None:
 
 def test_oasis2_multimodal_ladder_configs_keep_same_pipeline() -> None:
     temporal_cfg = load_research_oasis_training_config(Path("configs/oasis2_train_multimodal_v3_temporal.yaml"))
+    light_temporal_cfg = load_research_oasis_training_config(
+        Path("configs/oasis2_train_multimodal_v3b_temporal_light.yaml")
+    )
     consensus_cfg = load_research_oasis_training_config(Path("configs/oasis2_train_multimodal_v4_subject_consensus.yaml"))
 
     assert temporal_cfg.run_name == "oasis2_multimodal_v3_temporal"
+    assert light_temporal_cfg.run_name == "oasis2_multimodal_v3b_temporal_light"
     assert consensus_cfg.run_name == "oasis2_multimodal_v4_subject_consensus"
     assert temporal_cfg.model.architecture == "resnet50_multimodal"
+    assert light_temporal_cfg.model.architecture == "resnet50_multimodal"
     assert consensus_cfg.model.architecture == "resnet50_multimodal"
     assert temporal_cfg.model_config_path == Path("configs/oasis2_multimodal_model.yaml")
+    assert light_temporal_cfg.model_config_path == Path("configs/oasis2_multimodal_model.yaml")
     assert consensus_cfg.model_config_path == Path("configs/oasis2_multimodal_model.yaml")
     assert temporal_cfg.loss.temporal_lambda > consensus_cfg.loss.temporal_lambda >= 0.2
+    assert light_temporal_cfg.loss.temporal_lambda == 0.06
+    assert light_temporal_cfg.loss.temporal_lambda_warmup_epochs == 12
+    assert light_temporal_cfg.optimizer.learning_rate == 0.00009
+    assert light_temporal_cfg.optimizer.weight_decay == 0.01
+    assert light_temporal_cfg.loss.class_weights == (1.05, 1.0)
+    assert light_temporal_cfg.early_stopping.monitor == "val_auroc"
+    assert light_temporal_cfg.early_stopping.patience == 14
 
 
 def test_temporal_audit_uses_meta_session_ids(tmp_path: Path, capsys) -> None:

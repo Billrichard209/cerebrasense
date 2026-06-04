@@ -84,6 +84,8 @@ def build_next_best_action(payload: dict[str, Any]) -> dict[str, Any]:
     progression = payload.get("progression", {})
     review_queue = payload.get("review_queue", {})
     deployment = payload.get("deployment_readiness", {})
+    failed_ablations = payload.get("failed_ablations", [])
+    next_candidate_run_name = payload.get("next_candidate_run_name")
 
     if not run_name:
         return {
@@ -110,6 +112,16 @@ def build_next_best_action(payload: dict[str, Any]) -> dict[str, Any]:
             "priority": "critical",
             "reason": "Temporal paradoxes remain above the zero-paradox promotion gate.",
             "command": "python scripts/train_oasis2.py --config configs/oasis2_train_multimodal_v3_temporal.yaml",
+        }
+
+    if any(item.get("run_name") == "oasis2_multimodal_v3_temporal" for item in failed_ablations):
+        return {
+            "id": "run_v3b_temporal_light",
+            "label": "Run V3b Light",
+            "priority": "critical",
+            "reason": "V3 reached temporal consistency but failed discrimination; run the lighter temporal recovery recipe.",
+            "command": "python scripts/train_oasis2.py --config configs/oasis2_train_multimodal_v3b_temporal_light.yaml",
+            "run_name": next_candidate_run_name or "oasis2_multimodal_v3b_temporal_light",
         }
 
     review_count = int(_safe_float(candidate.get("review_required_count")))
@@ -197,6 +209,9 @@ def build_control_tower_payload(
             "static_demo_path": "http://127.0.0.1:8080/",
         },
         "active_vs_candidate_deltas": _active_vs_candidate_deltas(research_payload),
+        "failed_ablations": research_payload.get("failed_ablations", []),
+        "candidate_comparison": research_payload.get("candidate_comparison", {}),
+        "next_candidate_run_name": research_payload.get("next_candidate_run_name"),
         "blocker_summary": {
             "count": len(blockers),
             "metrics": [blocker.get("metric") for blocker in blockers],

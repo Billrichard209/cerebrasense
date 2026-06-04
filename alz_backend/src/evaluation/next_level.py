@@ -39,6 +39,8 @@ class NextLevelArtifacts:
     demo_bundle_manifest_md_path: Path
     run_registry_json_path: Path
     run_registry_md_path: Path
+    candidate_comparison_json_path: Path
+    candidate_comparison_md_path: Path
     demo_payload_json_path: Path
 
 
@@ -50,6 +52,8 @@ OASIS2_BASELINE_CANDIDATE = {
     "review_required_count": 31,
     "temporal_paradox_count": 4,
 }
+
+OASIS2_NEXT_CANDIDATE_RUN_NAME = "oasis2_multimodal_v3b_temporal_light"
 
 OASIS2_V2_ACCEPTANCE_TARGETS = {
     "test_auroc": 0.7250293772032903,
@@ -81,6 +85,13 @@ OASIS2_EXPERIMENT_LADDER = [
         "config_path": "configs/oasis2_train_multimodal_v3_temporal.yaml",
         "objective": "Increase temporal consistency pressure and reduce visit-to-visit contradictions.",
         "promotion_role": "temporal_ablation",
+    },
+    {
+        "stage": "v3b_temporal_light",
+        "run_name": "oasis2_multimodal_v3b_temporal_light",
+        "config_path": "configs/oasis2_train_multimodal_v3b_temporal_light.yaml",
+        "objective": "Recover discrimination with lighter temporal regularization while keeping paradox pressure.",
+        "promotion_role": "candidate_recovery",
     },
     {
         "stage": "v4_subject_consensus",
@@ -410,13 +421,14 @@ def build_model_board(*, settings: AppSettings | None = None) -> dict[str, Any]:
     elif best_oasis2:
         recommendation = "track_oasis2_longitudinal_candidate"
 
-    return {
+    model_board_payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "artifact_type": "cerebrasense_model_board",
         "decision_support_note": DECISION_SUPPORT_NOTE,
         "recommendation": recommendation,
         "promotion_gates": dict(OASIS2_PROMOTION_GATES),
         "experiment_ladder": list(OASIS2_EXPERIMENT_LADDER),
+        "next_candidate_run_name": OASIS2_NEXT_CANDIDATE_RUN_NAME,
         "entry_count": len(ranked),
         "entries": ranked,
         "promotion_briefing": {
@@ -426,6 +438,9 @@ def build_model_board(*, settings: AppSettings | None = None) -> dict[str, Any]:
             "frozen_oasis2_baseline_candidate": dict(OASIS2_BASELINE_CANDIDATE),
         },
     }
+    model_board_payload["failed_ablations"] = build_failed_ablations(model_board_payload)
+    model_board_payload["candidate_comparison"] = build_candidate_comparison_report(model_board_payload)
+    return model_board_payload
 
 
 def build_oasis2_run_registry(model_board: dict[str, Any], *, settings: AppSettings | None = None) -> dict[str, Any]:
@@ -471,6 +486,176 @@ def build_oasis2_run_registry(model_board: dict[str, Any], *, settings: AppSetti
         "entries": entries,
         "integrity_status": "pass" if not duplicate_run_names and not missing_metrics else "warn",
     }
+
+
+def _oasis2_entry_by_run_name(model_board: dict[str, Any], run_name: str) -> dict[str, Any]:
+    return next(
+        (
+            entry
+            for entry in model_board.get("entries", [])
+            if entry.get("dataset") == "oasis2" and entry.get("run_name") == run_name
+        ),
+        {},
+    )
+
+
+def build_failed_ablations(model_board: dict[str, Any]) -> list[dict[str, Any]]:
+    """Identify evaluated OASIS-2 ablations that should not remain candidate contenders."""
+
+    failed: list[dict[str, Any]] = []
+    for stage in OASIS2_EXPERIMENT_LADDER:
+        if stage.get("promotion_role") != "temporal_ablation":
+            continue
+        entry = _oasis2_entry_by_run_name(model_board, str(stage["run_name"]))
+        if not entry:
+            continue
+        auroc_delta = _round_metric(entry.get("auroc")) - OASIS2_BASELINE_CANDIDATE["test_auroc"]
+        balanced_delta = _round_metric(entry.get("balanced_accuracy")) - OASIS2_BASELINE_CANDIDATE["balanced_accuracy"]
+        specificity_delta = _round_metric(entry.get("specificity")) - 0.5675675675675675
+        if auroc_delta < -0.05 or balanced_delta < -0.05 or specificity_delta < -0.05:
+            failed.append(
+                {
+                    "run_name": entry.get("run_name"),
+                    "stage": stage.get("stage"),
+                    "status": "failed_ablation",
+                    "reason": "Temporal pressure reduced paradoxes but materially degraded held-out discrimination.",
+                    "auroc": entry.get("auroc"),
+                    "balanced_accuracy": entry.get("balanced_accuracy"),
+                    "specificity": entry.get("specificity"),
+                    "review_required_count": entry.get("review_required_count"),
+                    "subject_consensus_auroc": entry.get("subject_consensus_auroc"),
+                    "baseline_run_name": OASIS2_BASELINE_CANDIDATE["run_name"],
+                    "auroc_delta_vs_baseline": round(auroc_delta, 6),
+                    "balanced_accuracy_delta_vs_baseline": round(balanced_delta, 6),
+                    "specificity_delta_vs_baseline": round(specificity_delta, 6),
+                }
+            )
+    return failed
+
+
+def _predictions_path_for_entry(entry: dict[str, Any]) -> Path | None:
+    metrics_path = entry.get("metrics_path")
+    if not metrics_path:
+        return None
+    path = Path(str(metrics_path)).parent / "predictions.csv"
+    return path if path.exists() else None
+
+
+def _hard_case_counts(entry: dict[str, Any]) -> dict[str, Any]:
+    predictions_path = _predictions_path_for_entry(entry)
+    if predictions_path is None:
+        return {
+            "predictions_available": False,
+            "sample_count": 0,
+            "false_positive_count": None,
+            "false_negative_count": None,
+            "low_confidence_count": None,
+            "review_required_count": entry.get("review_required_count"),
+        }
+    frame = pd.read_csv(predictions_path)
+    true_label = frame.get("true_label", pd.Series(dtype=int)).astype(int)
+    predicted_label = frame.get("predicted_label", pd.Series(dtype=int)).astype(int)
+    confidence = frame.get("confidence_level", pd.Series([""] * len(frame))).astype(str).str.lower()
+    review_flag = frame.get("review_flag", pd.Series([False] * len(frame))).astype(str).str.lower()
+    return {
+        "predictions_available": True,
+        "sample_count": int(len(frame)),
+        "false_positive_count": int(((true_label == 0) & (predicted_label == 1)).sum()),
+        "false_negative_count": int(((true_label == 1) & (predicted_label == 0)).sum()),
+        "low_confidence_count": int(((confidence == "low") | review_flag.isin({"true", "1", "yes"})).sum()),
+        "review_required_count": entry.get("review_required_count"),
+    }
+
+
+def build_candidate_comparison_report(model_board: dict[str, Any]) -> dict[str, Any]:
+    """Compare the stable OASIS-2 baseline candidate with the failed V3 temporal ablation."""
+
+    baseline = _oasis2_entry_by_run_name(model_board, OASIS2_BASELINE_CANDIDATE["run_name"])
+    temporal = _oasis2_entry_by_run_name(model_board, "oasis2_multimodal_v3_temporal")
+    if not baseline or not temporal:
+        return {
+            "artifact_type": "oasis2_candidate_comparison",
+            "decision_support_note": DECISION_SUPPORT_NOTE,
+            "status": "missing_required_runs",
+            "baseline_run_name": baseline.get("run_name") if baseline else OASIS2_BASELINE_CANDIDATE["run_name"],
+            "comparison_run_name": temporal.get("run_name") if temporal else "oasis2_multimodal_v3_temporal",
+            "next_candidate_run_name": OASIS2_NEXT_CANDIDATE_RUN_NAME,
+        }
+
+    auroc_delta = round(_round_metric(temporal.get("auroc")) - _round_metric(baseline.get("auroc")), 6)
+    balanced_delta = round(_round_metric(temporal.get("balanced_accuracy")) - _round_metric(baseline.get("balanced_accuracy")), 6)
+    specificity_delta = round(_round_metric(temporal.get("specificity")) - _round_metric(baseline.get("specificity")), 6)
+    review_delta = int(_round_metric(temporal.get("review_required_count")) - _round_metric(baseline.get("review_required_count")))
+    failure_mode = "model_discrimination_collapse" if auroc_delta <= -0.10 or specificity_delta <= -0.20 else "threshold_or_review_burden_shift"
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_type": "oasis2_candidate_comparison",
+        "decision_support_note": DECISION_SUPPORT_NOTE,
+        "status": "v3_failed_ablation",
+        "baseline_run_name": baseline.get("run_name"),
+        "comparison_run_name": temporal.get("run_name"),
+        "next_candidate_run_name": OASIS2_NEXT_CANDIDATE_RUN_NAME,
+        "failure_mode": failure_mode,
+        "recommendation": "Run V3b with lighter temporal regularization; do not promote V3.",
+        "metric_deltas": {
+            "auroc_delta": auroc_delta,
+            "balanced_accuracy_delta": balanced_delta,
+            "specificity_delta": specificity_delta,
+            "review_required_delta": review_delta,
+            "subject_consensus_auroc_delta": round(
+                _round_metric(temporal.get("subject_consensus_auroc"))
+                - _round_metric(baseline.get("subject_consensus_auroc")),
+                6,
+            ),
+        },
+        "baseline_metrics": {
+            "auroc": baseline.get("auroc"),
+            "balanced_accuracy": baseline.get("balanced_accuracy"),
+            "specificity": baseline.get("specificity"),
+            "review_required_count": baseline.get("review_required_count"),
+            "subject_consensus_auroc": baseline.get("subject_consensus_auroc"),
+        },
+        "comparison_metrics": {
+            "auroc": temporal.get("auroc"),
+            "balanced_accuracy": temporal.get("balanced_accuracy"),
+            "specificity": temporal.get("specificity"),
+            "review_required_count": temporal.get("review_required_count"),
+            "subject_consensus_auroc": temporal.get("subject_consensus_auroc"),
+        },
+        "hard_case_counts": {
+            "baseline": _hard_case_counts(baseline),
+            "comparison": _hard_case_counts(temporal),
+        },
+    }
+
+
+def _write_candidate_comparison_md(payload: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# OASIS-2 Candidate Comparison",
+        "",
+        payload["decision_support_note"],
+        "",
+        f"- status: {payload.get('status')}",
+        f"- baseline_run_name: {payload.get('baseline_run_name')}",
+        f"- comparison_run_name: {payload.get('comparison_run_name')}",
+        f"- next_candidate_run_name: {payload.get('next_candidate_run_name')}",
+        f"- failure_mode: {payload.get('failure_mode')}",
+        f"- recommendation: {payload.get('recommendation')}",
+        "",
+        "## Metric Deltas",
+        "",
+    ]
+    for key, value in payload.get("metric_deltas", {}).items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Hard Cases", ""])
+    for label, counts in payload.get("hard_case_counts", {}).items():
+        lines.append(
+            f"- {label}: false_positive={counts.get('false_positive_count')}, "
+            f"false_negative={counts.get('false_negative_count')}, "
+            f"low_confidence={counts.get('low_confidence_count')}, "
+            f"review_required={counts.get('review_required_count')}"
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_run_registry_md(payload: dict[str, Any], path: Path) -> None:
@@ -1237,6 +1422,8 @@ def build_frontend_research_payload(
     readiness = deployment_readiness or {}
     demo_manifest = demo_bundle_manifest or {}
     registry = run_registry or {}
+    failed_ablations = model_board.get("failed_ablations", [])
+    candidate_comparison = model_board.get("candidate_comparison", {})
     paradox_summary = {
         "temporal_paradox_count": progression.get("temporal_paradox_count", 0),
         "temporal_paradox_epsilon": progression.get("temporal_paradox_epsilon"),
@@ -1305,6 +1492,9 @@ def build_frontend_research_payload(
             "recommendation": model_board.get("recommendation"),
             "top_models": top_model_summaries,
         },
+        "failed_ablations": failed_ablations,
+        "candidate_comparison": candidate_comparison,
+        "next_candidate_run_name": model_board.get("next_candidate_run_name", OASIS2_NEXT_CANDIDATE_RUN_NAME),
         "candidate_status": candidate_status,
         "promotion_blockers": blockers,
         "experiment_ladder": registry.get("experiment_ladder", model_board.get("experiment_ladder", [])),
@@ -1367,6 +1557,8 @@ def build_next_level_artifacts(
     deployment_readiness_md = resolved_output_root / "deployment_readiness.md"
     demo_bundle_manifest_json = resolved_output_root / "demo_bundle_manifest.json"
     demo_bundle_manifest_md = resolved_output_root / "demo_bundle_manifest.md"
+    candidate_comparison_json = resolved_output_root / "candidate_comparison.json"
+    candidate_comparison_md = resolved_output_root / "candidate_comparison.md"
     demo_json = frontend_payload_path or resolved_output_root / "research_mode_payload.json"
     handoff_payload = build_reviewer_handoff_pack(
         predictions_csv_path=Path(str(progression["predictions_csv_path"])) if progression.get("predictions_csv_path") else None,
@@ -1377,6 +1569,7 @@ def build_next_level_artifacts(
     model_cards = build_model_cards(model_board, progression, handoff_payload)
     deployment_readiness = build_deployment_readiness(model_board, progression, settings=resolved_settings)
     demo_bundle_manifest = build_demo_bundle_manifest(model_board, handoff_payload, settings=resolved_settings)
+    candidate_comparison = model_board.get("candidate_comparison", {})
     demo_payload = build_frontend_research_payload(
         model_board,
         progression,
@@ -1406,6 +1599,8 @@ def build_next_level_artifacts(
     _write_deployment_readiness_md(deployment_readiness, deployment_readiness_md)
     demo_bundle_manifest_json.write_text(json.dumps(demo_bundle_manifest, indent=2), encoding="utf-8")
     _write_demo_bundle_manifest_md(demo_bundle_manifest, demo_bundle_manifest_md)
+    candidate_comparison_json.write_text(json.dumps(candidate_comparison, indent=2), encoding="utf-8")
+    _write_candidate_comparison_md(candidate_comparison, candidate_comparison_md)
     ensure_directory(demo_json.parent)
     demo_json.write_text(json.dumps(demo_payload, indent=2), encoding="utf-8")
 
@@ -1426,5 +1621,7 @@ def build_next_level_artifacts(
         deployment_readiness_md_path=deployment_readiness_md,
         demo_bundle_manifest_json_path=demo_bundle_manifest_json,
         demo_bundle_manifest_md_path=demo_bundle_manifest_md,
+        candidate_comparison_json_path=candidate_comparison_json,
+        candidate_comparison_md_path=candidate_comparison_md,
         demo_payload_json_path=demo_json,
     )

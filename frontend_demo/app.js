@@ -1804,6 +1804,8 @@ function renderResearchMode() {
   const evidenceHealth = payload.evidence_health || {};
   const deploymentHealth = payload.deployment_health || {};
   const activeVsCandidate = payload.active_vs_candidate_deltas || payload.active_vs_candidate || {};
+  const failedAblations = payload.failed_ablations || [];
+  const candidateComparison = payload.candidate_comparison || {};
   const reviewQueue = payload.review_queue || {};
   const queueCases = reviewQueue.cases || [];
   const subjects = progression.top_subjects || [];
@@ -1816,7 +1818,7 @@ function renderResearchMode() {
   activeAuroc.textContent = formatMetric(active.auroc);
   oasis2Auroc.textContent = formatMetric(oasis2.auroc);
   reviewCount.textContent = String(oasis2.review_required_count ?? handoffCount ?? progression.high_priority_subject_count ?? "--");
-  summary.textContent = `${progression.subject_count || 0} subjects, ${progression.temporal_paradox_count || 0} temporal paradox flags, ${trajectory.review_subject_count || 0} trajectory reviews, ${promotionBlockers.length || 0} blockers, AUROC delta ${formatDelta(activeVsCandidate.auroc_delta)}, evidence ${evidenceHealth.status || "pending"}, next ${nextBestAction.label || "review evidence"}`;
+  summary.textContent = `${progression.subject_count || 0} subjects, ${progression.temporal_paradox_count || 0} temporal paradox flags, ${trajectory.review_subject_count || 0} trajectory reviews, ${promotionBlockers.length || 0} blockers, ${failedAblations.length || 0} failed ablations, AUROC delta ${formatDelta(activeVsCandidate.auroc_delta)}, V3 delta ${formatDelta(candidateComparison.metric_deltas?.auroc_delta)}, evidence ${evidenceHealth.status || "pending"}, next ${nextBestAction.label || "review evidence"}`;
   disclaimer.textContent = payload.decision_support_note || "Research decision-support only. Not diagnosis.";
   if (actions) {
     const actionChips = [
