@@ -41,6 +41,7 @@ def test_oasis2_v3_temporal_colab_notebook_is_run_ready() -> None:
     assert "PYTHON, '-u', 'scripts/train_oasis2_colab.py'" in cell_sources
     assert "evaluate_oasis2_candidate.py" in cell_sources
     assert "audit_temporal_paradoxes.py" in cell_sources
+    assert "label='mixed-label-analysis', allow_fail=True" in cell_sources
     assert "build_oasis2_leaderboard.py" in cell_sources
     assert "build_cerebrasense_control_tower.py" in cell_sources
     assert "make_archive" in cell_sources

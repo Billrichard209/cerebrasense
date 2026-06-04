@@ -39,7 +39,40 @@ def analyze_mixed_label_errors(
 
     subset = predictions[predictions[subject_col].astype(str).isin(mixed_subjects)].copy()
     if subset.empty:
-        raise ValueError("No mixed-label subject rows found in predictions CSV.")
+        ensure_directory(output_root)
+        per_subject = pd.DataFrame(
+            columns=[subject_col, "visit_count", "error_count", "mean_probability", "error_rate"]
+        )
+        summary = {
+            "status": "no_evaluable_mixed_label_rows",
+            "predictions_csv": str(predictions_csv),
+            "mixed_subject_count": len(mixed_subjects),
+            "evaluated_rows": 0,
+            "overall_error_rate": None,
+            "per_subject_error_rate_mean": None,
+            "per_subject_error_rate_max": None,
+        }
+        subset.to_csv(output_root / "mixed_label_prediction_rows.csv", index=False)
+        per_subject.to_csv(output_root / "mixed_label_subject_summary.csv", index=False)
+        (output_root / "mixed_label_error_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
+        (output_root / "mixed_label_error_summary.md").write_text(
+            "\n".join(
+                [
+                    "# OASIS-2 Mixed-Label Error Analysis",
+                    "",
+                    "- status: no_evaluable_mixed_label_rows",
+                    f"- mixed_subject_count: {summary['mixed_subject_count']}",
+                    "- evaluated_rows: 0",
+                    "",
+                    "No mixed-label subjects were present in the evaluated predictions split.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return summary
 
     subset["is_error"] = subset["true_label"].astype(int) != subset["predicted_label"].astype(int)
     per_subject = (
